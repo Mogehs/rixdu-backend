@@ -31,7 +31,6 @@ export const uploadFiles = multer({
   },
 });
 
-// Dynamic field handler that processes uploaded files based on field definitions
 export const processFileUploads = async (req, res, next) => {
   try {
     if (!req.files || !req.files.length) {

@@ -1,15 +1,15 @@
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, 'Please provide a name'],
+      required: [true, "Please provide a name"],
       trim: true,
-      maxlength: [50, 'Name cannot be more than 50 characters'],
+      maxlength: [50, "Name cannot be more than 50 characters"],
     },
     email: {
       type: String,
@@ -17,7 +17,7 @@ const UserSchema = new mongoose.Schema(
       sparse: true,
       match: [
         /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'Please provide a valid email',
+        "Please provide a valid email",
       ],
     },
     password: {
@@ -26,19 +26,19 @@ const UserSchema = new mongoose.Schema(
         // Password not required for Auth0 users
         return !this.auth0Id;
       },
-      minlength: [6, 'Password must be at least 6 characters'],
+      minlength: [6, "Password must be at least 6 characters"],
       select: false,
     },
     phoneNumber: {
       type: String,
-      maxlength: [20, 'Phone number cannot be longer than 20 characters'],
+      maxlength: [20, "Phone number cannot be longer than 20 characters"],
       sparse: true,
     },
 
     role: {
       type: String,
-      enum: ['user', 'admin'],
-      default: 'user',
+      enum: ["user", "admin"],
+      default: "user",
     },
 
     isVerified: {
@@ -49,8 +49,8 @@ const UserSchema = new mongoose.Schema(
     verificationExpire: Date,
     verificationMethod: {
       type: String,
-      enum: ['email', 'phone', 'auth0', 'none'],
-      default: 'none',
+      enum: ["email", "phone", "auth0", "none"],
+      default: "none",
     },
     createdAt: {
       type: Date,
@@ -61,8 +61,8 @@ const UserSchema = new mongoose.Schema(
     auth0Id: String,
     provider: {
       type: String,
-      enum: ['email', 'google-oauth2', 'apple', 'auth0', 'local'],
-      default: 'email',
+      enum: ["email", "google-oauth2", "apple", "auth0", "local"],
+      default: "email",
     },
   },
   {
@@ -79,8 +79,8 @@ UserSchema.index({ createdAt: -1 });
 UserSchema.index({ email: 1, role: 1 }, { sparse: true });
 UserSchema.index({ auth0Id: 1 }, { sparse: true });
 
-UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
+UserSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) {
     return next();
   }
 
@@ -101,7 +101,7 @@ UserSchema.methods.getSignedJwtToken = function () {
     },
     process.env.JWT_SECRET,
     {
-      expiresIn: process.env.JWT_EXPIRE || '30d',
+      expiresIn: process.env.JWT_EXPIRE || "30d",
     }
   );
 };
@@ -110,7 +110,7 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
   try {
     return await bcrypt.compare(enteredPassword, this.password);
   } catch (error) {
-    console.error('Password matching error:', error);
+    console.error("Password matching error:", error);
     return false;
   }
 };
@@ -121,9 +121,9 @@ UserSchema.methods.generateVerificationToken = function (method) {
   ).toString();
 
   this.verificationToken = crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(verificationCode)
-    .digest('hex');
+    .digest("hex");
 
   this.verificationExpire = Date.now() + 15 * 60 * 1000;
   this.verificationMethod = method;
@@ -135,9 +135,9 @@ UserSchema.methods.generatePasswordResetToken = function () {
   const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
 
   this.resetPasswordToken = crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(resetCode)
-    .digest('hex');
+    .digest("hex");
 
   this.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
 
@@ -146,7 +146,7 @@ UserSchema.methods.generatePasswordResetToken = function () {
 UserSchema.statics.findByIdLean = function (id) {
   return this.findById(id)
     .select(
-      'name email role phoneNumber avatar location isVerified verificationMethod'
+      "name email role phoneNumber location isVerified verificationMethod"
     )
     .lean();
 };
@@ -157,6 +157,6 @@ UserSchema.statics.findByEmailOrPhone = function (identifier) {
   });
 };
 
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model("User", UserSchema);
 
 export default User;

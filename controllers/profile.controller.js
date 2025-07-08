@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Profile from "../models/Profile.js";
 import User from "../models/User.js";
 import {
@@ -125,7 +126,15 @@ export const getProfessionalProfile = async (req, res) => {
 export const updatePersonalProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { bio, dateOfBirth, gender, languages, location } = req.body;
+    const {
+      profileEmail,
+      profilePhoneNumber,
+      bio,
+      dateOfBirth,
+      gender,
+      languages,
+      location,
+    } = req.body;
 
     let profile = await Profile.findOne({ user: userId });
 
@@ -152,6 +161,35 @@ export const updatePersonalProfile = async (req, res) => {
         profile.personal.avatar = avatarResult.url;
         profile.personal.avatar_public_id = avatarResult.public_id;
       }
+    }
+
+    // Update profile email and phone number
+    if (profileEmail !== undefined) {
+      // Validate email format if provided and not empty
+      if (profileEmail && profileEmail.trim() !== "") {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(profileEmail)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid email format for profile email",
+          });
+        }
+      }
+      profile.personal.profileEmail = profileEmail;
+    }
+
+    if (profilePhoneNumber !== undefined) {
+      // Validate phone number format if provided and not empty
+      if (profilePhoneNumber && profilePhoneNumber.trim() !== "") {
+        const phoneRegex = /^[+]?[1-9][\d]{0,15}$/;
+        if (!phoneRegex.test(profilePhoneNumber.replace(/[\s\-()]/g, ""))) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid phone number format for profile phone number",
+          });
+        }
+      }
+      profile.personal.profilePhoneNumber = profilePhoneNumber;
     }
 
     if (bio !== undefined) profile.personal.bio = bio;
@@ -394,6 +432,44 @@ export const removeFromFavorites = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error removing from favorites. Please try again.",
+    });
+  }
+};
+
+// Get user favorites
+export const getUserFavorites = async (req, res) => {
+  try {
+    console.log(`Fetching favorites for user: ${req.user.id}`);
+
+    const userId = req.params.userId || req.user.id;
+
+    // Validate that userId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    const profile = await Profile.getUserFavorites(userId);
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: profile.favorites.listings.length,
+      data: profile.favorites.listings,
+    });
+  } catch (error) {
+    console.error(`Error fetching user favorites: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: "Server error fetching favorites. Please try again.",
     });
   }
 };

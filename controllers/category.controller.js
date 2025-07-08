@@ -77,6 +77,7 @@ export const createCategory = async (req, res) => {
       data: newCategory,
     });
   } catch (error) {
+    console.error("createCategory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error creating category. Please try again.",
@@ -146,14 +147,25 @@ export const getCategories = async (req, res) => {
 
 export const getCategory = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { identifier } = req.params;
+    const { storeId } = req.query;
 
     let category;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      category = await Category.findById(id).lean();
+    let filter = {};
+
+    // Check if identifier is a valid ObjectId or treat as slug
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      filter._id = identifier;
     } else {
-      category = await Category.findOne({ slug: id }).lean();
+      filter.slug = identifier;
     }
+
+    // Add storeId to filter if provided
+    if (storeId) {
+      filter.storeId = storeId;
+    }
+
+    category = await Category.findOne(filter).lean();
 
     if (!category) {
       return res.status(404).json({
@@ -162,6 +174,7 @@ export const getCategory = async (req, res) => {
       });
     }
 
+    // Get children if category has any
     if (category.children && category.children.length > 0) {
       const children = await Category.findChildren(
         category._id,
@@ -175,6 +188,7 @@ export const getCategory = async (req, res) => {
       data: category,
     });
   } catch (error) {
+    console.error("getCategory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching category. Please try again.",
@@ -184,10 +198,17 @@ export const getCategory = async (req, res) => {
 
 export const updateCategory = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { identifier } = req.params;
     const { name, isLeaf, fields } = req.body;
 
-    const category = await Category.findById(id);
+    let category;
+    // Check if identifier is a valid ObjectId or treat as slug
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      category = await Category.findById(identifier);
+    } else {
+      category = await Category.findOne({ slug: identifier });
+    }
+
     if (!category) {
       return res.status(404).json({
         success: false,
@@ -205,7 +226,7 @@ export const updateCategory = async (req, res) => {
 
       const slugExists = await Category.exists({
         slug,
-        _id: { $ne: id },
+        _id: { $ne: category._id },
         storeId: category.storeId,
       });
 
@@ -228,6 +249,7 @@ export const updateCategory = async (req, res) => {
           });
         }
       } catch (uploadError) {
+        console.error("Icon upload error:", uploadError);
         return res.status(400).json({
           success: false,
           message: "Error updating category icon",
@@ -250,7 +272,7 @@ export const updateCategory = async (req, res) => {
     }
 
     const updatedCategory = await Category.findByIdAndUpdate(
-      id,
+      category._id,
       { $set: updateData },
       { new: true, runValidators: true }
     );
@@ -260,6 +282,7 @@ export const updateCategory = async (req, res) => {
       data: updatedCategory,
     });
   } catch (error) {
+    console.error("updateCategory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error updating category. Please try again.",
@@ -269,8 +292,15 @@ export const updateCategory = async (req, res) => {
 
 export const deleteCategory = async (req, res) => {
   try {
-    const { id } = req.params;
-    const category = await Category.findById(id);
+    const { identifier } = req.params;
+
+    let category;
+    // Check if identifier is a valid ObjectId or treat as slug
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      category = await Category.findById(identifier);
+    } else {
+      category = await Category.findOne({ slug: identifier });
+    }
 
     if (!category) {
       return res.status(404).json({
@@ -357,13 +387,18 @@ export const getCategoryTree = async (req, res) => {
 
 export const getCategoryPath = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { identifier } = req.params;
     let category;
 
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      category = await Category.findById(id);
+    // Check if identifier is a valid ObjectId or treat as slug/name
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      category = await Category.findById(identifier);
     } else {
-      category = await Category.findOne({ name: id });
+      // Try to find by slug first, then by name
+      category = await Category.findOne({ slug: identifier });
+      if (!category) {
+        category = await Category.findOne({ name: identifier });
+      }
     }
 
     if (!category) {
@@ -377,6 +412,7 @@ export const getCategoryPath = async (req, res) => {
     let current = category;
     let rootCategory = current;
 
+    // Build the path from current category to root
     path.unshift({
       _id: current._id,
       name: current.name,
@@ -407,6 +443,7 @@ export const getCategoryPath = async (req, res) => {
       data: path,
     });
   } catch (error) {
+    console.error("getCategoryPath error:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -435,6 +472,163 @@ export const getCategoryByStore = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+export const getCategoryBySlug = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { storeId } = req.query;
+
+    const filter = { slug };
+    if (storeId) {
+      filter.storeId = storeId;
+    }
+
+    const category = await Category.findOne(filter).lean();
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    // Get children if category has any
+    if (category.children && category.children.length > 0) {
+      const children = await Category.findChildren(
+        category._id,
+        category.storeId
+      );
+      category.childrenData = children;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: category,
+    });
+  } catch (error) {
+    console.error("getCategoryBySlug error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching category by slug. Please try again.",
+    });
+  }
+};
+
+export const searchCategories = async (req, res) => {
+  try {
+    const { q, storeId, isLeaf, level, page = 1, limit = 20 } = req.query;
+
+    const skip = (page - 1) * limit;
+    const filter = {};
+
+    if (storeId) {
+      filter.storeId = storeId;
+    }
+
+    if (isLeaf !== undefined) {
+      filter.isLeaf = isLeaf === "true";
+    }
+
+    if (level !== undefined) {
+      filter.level = parseInt(level);
+    }
+
+    // Text search
+    if (q) {
+      filter.$or = [
+        { name: { $regex: q, $options: "i" } },
+        { slug: { $regex: q, $options: "i" } },
+      ];
+    }
+
+    const categories = await Category.find(filter)
+      .select("name slug icon isLeaf childrenCount level path storeId")
+      .sort({ level: 1, name: 1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Category.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      count: categories.length,
+      total,
+      pagination: {
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
+      },
+      data: categories,
+    });
+  } catch (error) {
+    console.error("searchCategories error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error searching categories. Please try again.",
+    });
+  }
+};
+
+export const getCategoryChildren = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { storeId, page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const filter = { slug };
+    if (storeId) {
+      filter.storeId = storeId;
+    }
+
+    const category = await Category.findOne(filter).lean();
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    const children = await Category.find({
+      parent: category._id,
+      storeId: category.storeId,
+    })
+      .select("name slug icon isLeaf childrenCount level")
+      .sort("name")
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Category.countDocuments({
+      parent: category._id,
+      storeId: category.storeId,
+    });
+
+    res.status(200).json({
+      success: true,
+      parentCategory: {
+        _id: category._id,
+        name: category.name,
+        slug: category.slug,
+      },
+      count: children.length,
+      total,
+      pagination: {
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
+      },
+      data: children,
+    });
+  } catch (error) {
+    console.error("getCategoryChildren error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching category children. Please try again.",
     });
   }
 };

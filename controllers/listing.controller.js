@@ -225,7 +225,7 @@ export const getListing = async (req, res) => {
   try {
     const listing = await Listing.findOne({ _id: req.params.id })
       .populate("categoryId", "name fields")
-      .populate("userId", "name email avatar")
+      .populate("userId", "name email")
       .lean();
 
     if (!listing) {
@@ -309,13 +309,18 @@ export const updateListing = async (req, res) => {
         req.body.categoryId || listing.categoryId
       );
 
-      const transformedValues = new Map();
+      const transformedValues = new Map(listing.values || new Map());
       const validationErrors = [];
       const userValues = req.body.values || {};
 
-      for (const field of category.fields) {
-        const fieldName = field.name;
+      for (const fieldName in userValues) {
         const fieldValue = userValues[fieldName];
+
+        const field = category.fields.find((f) => f.name === fieldName);
+
+        if (!field) {
+          continue;
+        }
 
         if (
           field.required &&
@@ -333,7 +338,7 @@ export const updateListing = async (req, res) => {
         }
 
         switch (field.type) {
-          case "number":
+          case "number": {
             const numValue = Number(fieldValue);
             if (isNaN(numValue)) {
               validationErrors.push({
@@ -344,8 +349,9 @@ export const updateListing = async (req, res) => {
               transformedValues.set(fieldName, numValue);
             }
             break;
+          }
 
-          case "select":
+          case "select": {
             if (field.options && !field.options.includes(fieldValue)) {
               validationErrors.push({
                 field: fieldName,
@@ -359,6 +365,7 @@ export const updateListing = async (req, res) => {
               transformedValues.set(fieldName, fieldValue);
             }
             break;
+          }
 
           default:
             transformedValues.set(fieldName, fieldValue);
@@ -475,15 +482,12 @@ export const searchListings = async (req, res) => {
     const query = { status: "active" };
 
     if (categoryId) {
-      // Allow searching by category ID or any parent in the category path
       query.$or = [{ categoryId }, { categoryPath: categoryId }];
     }
 
     if (storeId) query.storeId = storeId;
 
-    // Handle dynamic values search
     if (values && typeof values === "object") {
-      // Get the category to understand field types
       const category = await Category.findById(categoryId);
 
       if (!category) {
@@ -493,19 +497,14 @@ export const searchListings = async (req, res) => {
         });
       }
 
-      // Process each search field
       Object.entries(values).forEach(([key, value]) => {
-        // Find the field definition in the category schema
         const fieldDef = category.fields.find((f) => f.name === key);
 
         if (fieldDef) {
-          // Apply different search strategies based on field type
           switch (fieldDef.type) {
             case "number":
-              // Allow range queries for numbers
               if (typeof value === "object") {
                 if (value.min !== undefined && value.max !== undefined) {
-                  // Range query
                   query[`values.${key}`] = {
                     $gte: Number(value.min),
                     $lte: Number(value.max),
@@ -515,17 +514,14 @@ export const searchListings = async (req, res) => {
                 } else if (value.max !== undefined) {
                   query[`values.${key}`] = { $lte: Number(value.max) };
                 } else {
-                  // Exact match
                   query[`values.${key}`] = Number(value);
                 }
               } else {
-                // Exact match
                 query[`values.${key}`] = Number(value);
               }
               break;
 
             case "date":
-              // Allow range queries for dates
               if (typeof value === "object") {
                 if (value.start && value.end) {
                   // Date range
@@ -539,38 +535,31 @@ export const searchListings = async (req, res) => {
                   query[`values.${key}`] = { $lte: new Date(value.end) };
                 }
               } else {
-                // Try to match specific date
                 query[`values.${key}`] = new Date(value);
               }
               break;
 
             case "checkbox":
-              // For checkboxes, search for arrays containing all selected values
               if (Array.isArray(value)) {
                 query[`values.${key}`] = { $all: value };
               } else {
-                // For single checkbox, search for exact match
                 query[`values.${key}`] = value;
               }
               break;
 
             case "select":
-              // For select, search for exact match
               query[`values.${key}`] = value;
               break;
 
-            default: // text and other types
-              // Use text search (case-insensitive partial match)
+            default:
               query[`values.${key}`] = { $regex: value, $options: "i" };
           }
         }
       });
     }
 
-    // Pagination
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Sorting
     const sortObj = {};
     sortObj[sort] = order === "desc" ? -1 : 1;
 

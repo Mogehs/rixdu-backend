@@ -16,9 +16,16 @@ import storeRoutes from "./routes/store.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
 import listingRoutes from "./routes/listing.routes.js";
 import profileRoutes from "./routes/profile.routes.js";
+import ratingRoutes from "./routes/rating.routes.js";
+import chatRoutes from "./routes/chat.routes.js";
+import messagesRoutes from "./routes/messages.routes.js";
 import errorHandler, { notFound } from "./middleware/error.middleware.js";
 import logger, { httpLogger } from "./utils/logger.js";
 import performanceMonitor from "./middleware/performance.middleware.js";
+import process from "process";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import { socketHandler } from "./socket/socketHandler.js";
 
 dotenv.config();
 
@@ -109,6 +116,9 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
   app.use(`${apiVersion}/stores`, storeRoutes);
   app.use(`${apiVersion}/categories`, categoryRoutes);
   app.use(`${apiVersion}/listings`, listingRoutes);
+  app.use(`${apiVersion}/ratings`, ratingRoutes);
+  app.use(`${apiVersion}/chats`, chatRoutes);
+  app.use(`${apiVersion}/messages`, messagesRoutes);
 
   app.get("/api/", (req, res) => {
     res.json({
@@ -135,9 +145,21 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
   app.use(errorHandler);
 
   const PORT = process.env.PORT || 5000;
-  const server = app.listen(PORT, () => {
+
+  const server = createServer(app);
+  const io = new Server(server, {
+    cors: {
+      origin: process.env.CLIENT_URL || "http://localhost:3000",
+      methods: ["GET", "POST"],
+      credentials: true,
+    },
+  });
+
+  server.listen(PORT, () => {
     logger.info(`Worker ${process.pid} - Server running on port ${PORT}`);
   });
+
+  socketHandler(io);
 
   process.on("SIGTERM", () => {
     logger.info("SIGTERM received, shutting down gracefully");
@@ -157,4 +179,3 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
     }, 1000);
   });
 }
-// restart

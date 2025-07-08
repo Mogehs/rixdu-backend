@@ -11,6 +11,7 @@ import {
   uploadResume,
   addToFavorites,
   removeFromFavorites,
+  getUserFavorites,
   searchUsersBySkills,
 } from "../controllers/profile.controller.js";
 
@@ -18,6 +19,10 @@ const router = express.Router();
 
 router.get("/public/:userId", getPublicProfile);
 router.get("/search", searchUsersBySkills);
+
+router.post("/favorites", protect, addToFavorites);
+router.get("/favorites/:userId?", protect, getUserFavorites);
+router.delete("/favorites/:listingId", protect, removeFromFavorites);
 
 router.get("/me", protect, getCompleteProfile);
 router.get("/job/:userId?", protect, getJobProfile);
@@ -37,8 +42,5 @@ router.post(
   resumeUpload.single("resume"),
   uploadResume
 );
-
-router.post("/favorites", protect, addToFavorites);
-router.delete("/favorites/:listingId", protect, removeFromFavorites);
 
 export default router;

@@ -14,8 +14,8 @@ const fieldSchema = new mongoose.Schema(
         "date",
         "checkbox",
         "file",
-        "image",
         "input",
+        "point",
       ],
     },
     options: [String],
@@ -94,12 +94,9 @@ categorySchema.index({ name: 1, slug: 1 });
 
 categorySchema.pre("save", async function (next) {
   try {
-    if (!this.slug) {
-      this.slug = this.name
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, "")
-        .replace(/[\s_-]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+    // Generate unique slug if not provided or if name has changed
+    if (!this.slug || this.isModified("name")) {
+      this.slug = await this.generateUniqueSlug();
     }
 
     this.updatedAt = Date.now();
@@ -170,6 +167,95 @@ categorySchema.statics.findChildren = function (parentId, storeId) {
     .select("name slug icon isLeaf childrenCount")
     .sort("name")
     .lean();
+};
+
+categorySchema.statics.findBySlug = function (slug, storeId = null) {
+  const filter = { slug };
+  if (storeId) {
+    filter.storeId = storeId;
+  }
+  return this.findOne(filter);
+};
+
+categorySchema.statics.findChildrenBySlug = function (parentSlug, storeId) {
+  return this.aggregate([
+    // First find the parent by slug
+    {
+      $match: {
+        slug: parentSlug,
+        storeId: new mongoose.Types.ObjectId(storeId),
+      },
+    },
+    // Then find its children
+    {
+      $lookup: {
+        from: "categories",
+        localField: "_id",
+        foreignField: "parent",
+        as: "children",
+      },
+    },
+    { $unwind: "$children" },
+    { $replaceRoot: { newRoot: "$children" } },
+    { $sort: { name: 1 } },
+    {
+      $project: {
+        name: 1,
+        slug: 1,
+        icon: 1,
+        isLeaf: 1,
+        childrenCount: 1,
+        level: 1,
+      },
+    },
+  ]);
+};
+
+categorySchema.statics.getSlugPath = async function (categoryId) {
+  const category = await this.findById(categoryId);
+  if (!category) return [];
+
+  const path = [];
+  let current = category;
+
+  path.unshift(current.slug);
+
+  while (current.parent) {
+    current = await this.findById(current.parent);
+    if (current) {
+      path.unshift(current.slug);
+    } else {
+      break;
+    }
+  }
+
+  return path;
+};
+
+// Method to generate unique slug
+categorySchema.methods.generateUniqueSlug = async function () {
+  let baseSlug = this.name
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  let slug = baseSlug;
+  let counter = 1;
+
+  // Check for existing slug in the same store
+  while (
+    await mongoose.model("Category").exists({
+      slug,
+      storeId: this.storeId,
+      _id: { $ne: this._id },
+    })
+  ) {
+    slug = `${baseSlug}-${counter}`;
+    counter++;
+  }
+
+  return slug;
 };
 
 const Category = mongoose.model("Category", categorySchema);

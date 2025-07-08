@@ -11,6 +11,12 @@ const ProfileSchema = new mongoose.Schema(
 
     // Profile information
     personal: {
+      profileEmail: {
+        type: String,
+      },
+      profilePhoneNumber: {
+        type: String,
+      },
       avatar: {
         type: String,
         default: "default-avatar.jpg",
@@ -123,6 +129,8 @@ ProfileSchema.index({ "personal.avatar": 1 });
 ProfileSchema.index({ "personal.location.country": 1 });
 ProfileSchema.index({ "personal.location.neighborhood": 1 });
 ProfileSchema.index({ "jobProfile.skills": 1 });
+ProfileSchema.index({ "personal.profileEmail": 1 });
+ProfileSchema.index({ "personal.profilePhoneNumber": 1 });
 ProfileSchema.index({
   "jobProfile.experience.jobTitle": "text",
   "jobProfile.experience.company": "text",
@@ -133,14 +141,12 @@ ProfileSchema.index({ "favorites.listings": 1 });
 
 // Method to get complete profile
 ProfileSchema.statics.getCompleteProfile = async function (userId) {
-  return (
-    this.findOne({ user: userId })
-      .populate("user", "name email phoneNumber isVerified")
-      .populate("favorites.listings")
-      .populate("public.ads")
-      // .populate("public.ratings")
-      .lean()
-  );
+  return this.findOne({ user: userId })
+    .populate("user", "name email phoneNumber isVerified")
+    .populate("favorites.listings")
+    .populate("public.ads")
+    .populate("public.ratings")
+    .lean();
 };
 
 // Method to get only public profile information
@@ -157,7 +163,10 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
 ProfileSchema.statics.getJobProfile = async function (userId) {
   return this.findOne({ user: userId })
     .populate("user", "name email phoneNumber")
-    .select("jobProfile personal.avatar personal.location")
+    .select({
+      jobProfile: 1,
+      personal: 1,
+    })
     .lean();
 };
 
@@ -166,7 +175,7 @@ ProfileSchema.statics.getProfessionalProfile = async function (userId) {
   return this.findOne({ user: userId })
     .populate("user", "name email")
     .select(
-      "jobProfile.skills jobProfile.experience jobProfile.qualifications jobProfile.digitalProfile personal.avatar"
+      "personal.profileEmail personal.profilePhoneNumber jobProfile.skills jobProfile.experience jobProfile.qualifications jobProfile.digitalProfile personal.avatar"
     )
     .lean();
 };
@@ -176,8 +185,25 @@ ProfileSchema.statics.findBySkills = async function (skills, limit = 10) {
   console.log("Searching profiles by skills:", skills);
   return this.find({ "jobProfile.skills": { $in: skills } })
     .populate("user", "name")
-    .select("jobProfile.skills jobProfile.experience personal.avatar")
+    .select(
+      "jobProfile.skills jobProfile.experience personal.profileEmail personal.profilePhoneNumber personal.avatar"
+    )
     .limit(limit)
+    .lean();
+};
+
+// Method to get user favorites
+ProfileSchema.statics.getUserFavorites = async function (userId) {
+  return this.findOne({ user: userId })
+    .populate({
+      path: "favorites.listings",
+      select: "title description price images category location createdAt",
+      populate: {
+        path: "category",
+        select: "name",
+      },
+    })
+    .select("favorites")
     .lean();
 };
 
