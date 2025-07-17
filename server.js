@@ -30,12 +30,29 @@ import { socketHandler } from "./socket/socketHandler.js";
 dotenv.config();
 
 const numCPUs = os.cpus().length;
+const maxWorkers = parseInt(process.env.MAX_WORKERS) || Math.min(numCPUs, 2);
+const enableClustering = process.env.ENABLE_CLUSTERING === "true";
+const memoryLimitWarning = parseInt(process.env.MEMORY_LIMIT_WARNING) || 200;
 
-if (cluster.isPrimary && process.env.NODE_ENV === "production") {
+if (
+  cluster.isPrimary &&
+  process.env.NODE_ENV === "production" &&
+  enableClustering
+) {
   logger.info(`Primary ${process.pid} is running`);
-  logger.info(`Setting up ${numCPUs} workers...`);
+  logger.info(`Setting up ${maxWorkers} workers (CPU cores: ${numCPUs})...`);
 
-  for (let i = 0; i < numCPUs; i++) {
+  // Memory monitoring for master process
+  const masterMemoryMonitor = setInterval(() => {
+    const used = process.memoryUsage();
+    const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
+
+    if (heapUsedMB > memoryLimitWarning) {
+      logger.warn(`Master process high memory usage: ${heapUsedMB}MB`);
+    }
+  }, 60000); // Check every minute
+
+  for (let i = 0; i < maxWorkers; i++) {
     cluster.fork();
   }
 
@@ -44,6 +61,20 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
       `Worker ${worker.process.pid} died with code ${code} and signal ${signal}. Restarting...`
     );
     cluster.fork();
+  });
+
+  // Graceful shutdown for master process
+  process.on("SIGTERM", () => {
+    logger.info("Master process received SIGTERM, shutting down workers...");
+    clearInterval(masterMemoryMonitor);
+
+    for (const id in cluster.workers) {
+      cluster.workers[id].kill();
+    }
+
+    setTimeout(() => {
+      process.exit(0);
+    }, 5000);
   });
 } else {
   const app = express();
@@ -72,11 +103,15 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
   app.use(performanceMonitor);
 
   const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
     standardHeaders: true,
     legacyHeaders: false,
     message: "Too many requests from this IP, please try again later.",
+    skipSuccessfulRequests: true, // Don't count successful requests
+    skipFailedRequests: true, // Don't count failed requests
+    // Memory optimization - smaller window for memory store
+    max: process.env.NODE_ENV === "production" ? 50 : 100,
     handler: (req, res, next, options) => {
       logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
       res.status(options.statusCode).json({
@@ -94,7 +129,10 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
 
   mongoose.connection.on("disconnected", () => {
     logger.warn("MongoDB disconnected. Attempting to reconnect...");
-    setTimeout(connectDB, 5000);
+    // Prevent multiple reconnection attempts
+    if (mongoose.connection.readyState === 0) {
+      setTimeout(connectDB, 5000);
+    }
   });
 
   process.on("SIGINT", async () => {
@@ -153,7 +191,28 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
       methods: ["GET", "POST"],
       credentials: true,
     },
+    maxHttpBufferSize: 1e6, // 1MB buffer limit
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
+
+  // Memory monitoring
+  const memoryMonitorInterval = setInterval(() => {
+    const used = process.memoryUsage();
+    const memoryUsageMB = {
+      rss: Math.round(used.rss / 1024 / 1024),
+      heapTotal: Math.round(used.heapTotal / 1024 / 1024),
+      heapUsed: Math.round(used.heapUsed / 1024 / 1024),
+      external: Math.round(used.external / 1024 / 1024),
+    };
+
+    // Log warning if heap usage exceeds 200MB
+    if (memoryUsageMB.heapUsed > 200) {
+      logger.warn(
+        `High memory usage detected: ${JSON.stringify(memoryUsageMB)}MB`
+      );
+    }
+  }, 30000); // Check every 30 seconds
 
   server.listen(PORT, () => {
     logger.info(`Worker ${process.pid} - Server running on port ${PORT}`);
@@ -163,6 +222,7 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
 
   process.on("SIGTERM", () => {
     logger.info("SIGTERM received, shutting down gracefully");
+    clearInterval(memoryMonitorInterval);
     server.close(() => {
       logger.info("Process terminated");
     });
