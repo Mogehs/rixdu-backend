@@ -6082,3 +6082,441 @@
 [2025-07-08T14:07:42.357Z] [INFO] Worker 1688 - Server running on port 5000
 [2025-07-08T14:08:33.209Z] [INFO] Worker 17960 - Server running on port 5000
 [2025-07-08T15:13:10.806Z] [INFO] Worker 12816 - Server running on port 5000
+[2025-07-09T04:29:41.584Z] [INFO] Worker 2088 - Server running on port 5000
+[2025-07-09T04:44:32.192Z] [INFO] Worker 11296 - Server running on port 5000
+[2025-07-09T04:44:33.030Z] [WARN] Slow request detected: GET /api/v1/chats/685d80088299182cf318cf1a {"responseTime":"656.79ms","statusCode":304,"memoryIncreaseMB":{"rss":3.9296875,"heapTotal":1.5,"heapUsed":5.301475524902344,"external":0.06094074249267578},"user":"unauthenticated"}
+[2025-07-09T04:49:24.633Z] [INFO] Worker 2692 - Server running on port 5000
+[2025-07-09T05:02:31.362Z] [INFO] Worker 15000 - Server running on port 5000
+[2025-07-09T05:03:54.395Z] [INFO] Worker 13996 - Server running on port 5000
+[2025-07-09T05:15:18.667Z] [INFO] Worker 10492 - Server running on port 5000
+[2025-07-09T05:15:36.602Z] [INFO] Worker 10276 - Server running on port 5000
+[2025-07-09T05:18:46.668Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"628.41ms","statusCode":200,"memoryIncreaseMB":{"rss":3.125,"heapTotal":0.75,"heapUsed":0.6216583251953125,"external":0.02057933807373047},"user":"unauthenticated"}
+[2025-07-09T05:18:46.679Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"571.41ms","statusCode":200,"memoryIncreaseMB":{"rss":1.36328125,"heapTotal":0.75,"heapUsed":0.3877716064453125,"external":0.025302886962890625},"user":"unauthenticated"}
+[2025-07-09T05:18:52.645Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.668Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.691Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.716Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.742Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.761Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.790Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.812Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.836Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.861Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.885Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.910Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.931Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.956Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.973Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:52.998Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.017Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.035Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.053Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.072Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.097Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.117Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.139Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.156Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.185Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.208Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.235Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.265Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.302Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.335Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.360Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.396Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.428Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.474Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.502Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.525Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.557Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.586Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.609Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.638Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.669Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.690Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.717Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.756Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.776Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.798Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.841Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.862Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.882Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.906Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.931Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.961Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:53.989Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.014Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.036Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.059Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.086Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.106Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.127Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.146Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.166Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.187Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.208Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.228Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.249Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.269Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.291Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.309Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.331Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.352Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.372Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.394Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.414Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.435Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.457Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.478Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.498Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.528Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.547Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.569Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.598Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.627Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.651Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.670Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.687Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.709Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.727Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.749Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.772Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.795Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.819Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.838Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.864Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.886Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.916Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.943Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.965Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:54.991Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.034Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.080Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.110Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.153Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.185Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.217Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.252Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.284Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.312Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.345Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.378Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.411Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.435Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.467Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.497Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.519Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.547Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.569Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.595Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.615Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.635Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.669Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.690Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.713Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.733Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.757Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.779Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.803Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.824Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.845Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.869Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.896Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.915Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.934Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.954Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.973Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:55.992Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.014Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.039Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.058Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.075Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.097Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.115Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.132Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.149Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.165Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.182Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.198Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.218Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.235Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.252Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.272Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.291Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.307Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.324Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.346Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.362Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.378Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.400Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.415Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.432Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.447Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.465Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.482Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.505Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.521Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.546Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.574Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.590Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.615Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.640Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.660Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.681Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.713Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.733Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.756Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.794Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.818Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.847Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.878Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.898Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.927Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.958Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:56.978Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.007Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.035Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.055Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.082Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.132Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.166Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.195Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.224Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.256Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.286Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.319Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.353Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.403Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.446Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.495Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.520Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.553Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.587Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.612Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.635Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.656Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.677Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.700Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.747Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.782Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.819Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.861Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.899Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.936Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.966Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:57.994Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.021Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.048Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.077Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.111Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.143Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.175Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.200Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.231Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.256Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.283Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.311Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.360Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.402Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.443Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.472Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.505Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.536Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.563Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.598Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.629Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.660Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.684Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.712Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.744Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.773Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.809Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.834Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.869Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.908Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.949Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:58.998Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.029Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.064Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.098Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.141Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.183Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.225Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.267Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.306Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.351Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.395Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.445Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.493Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.540Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.588Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.637Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.679Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.726Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.775Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.817Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.851Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.899Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.930Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:18:59.967Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.015Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.055Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.095Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.129Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.164Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.204Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.236Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.277Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.320Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.365Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.402Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.438Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.484Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.548Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.656Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.710Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.753Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.807Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.862Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.908Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:00.975Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.011Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.044Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.108Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.149Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.192Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.253Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.333Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.486Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.545Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.596Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.668Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.723Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.769Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.814Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.852Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.903Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.951Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:01.991Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.035Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.082Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.126Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.172Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.222Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.252Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.309Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.355Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.411Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.450Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.503Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.549Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.594Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.632Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.679Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.724Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:02.833Z] [WARN] Rate limit exceeded for IP: ::1
+[2025-07-09T05:19:27.084Z] [INFO] Worker 16940 - Server running on port 5000
+[2025-07-09T05:19:34.456Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"598.37ms","statusCode":200,"memoryIncreaseMB":{"rss":-21.06640625,"heapTotal":-28,"heapUsed":-10.487091064453125,"external":-0.06290149688720703},"user":"unauthenticated"}
+[2025-07-09T05:20:21.907Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"1342.26ms","statusCode":200,"memoryIncreaseMB":{"rss":0.25390625,"heapTotal":0,"heapUsed":0.45816802978515625,"external":0.012717247009277344},"user":"unauthenticated"}
+[2025-07-09T05:22:01.035Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2326.15ms","statusCode":200,"memoryIncreaseMB":{"rss":0.3671875,"heapTotal":1.25,"heapUsed":-0.29608154296875,"external":0.009092330932617188},"user":"unauthenticated"}
+[2025-07-09T05:26:31.298Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"1839.33ms","statusCode":200,"memoryIncreaseMB":{"rss":0.0859375,"heapTotal":0,"heapUsed":-0.3446044921875,"external":0.0067996978759765625},"user":"unauthenticated"}
+[2025-07-09T05:30:29.585Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"1606.86ms","statusCode":200,"memoryIncreaseMB":{"rss":0.98046875,"heapTotal":0,"heapUsed":-0.28343963623046875,"external":-0.0007143020629882812},"user":"unauthenticated"}
+[2025-07-09T05:53:50.116Z] [INFO] Worker 10368 - Server running on port 5000
+[2025-07-09T05:53:56.696Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2542.64ms","statusCode":200,"memoryIncreaseMB":{"rss":3.81640625,"heapTotal":0.5,"heapUsed":1.0223617553710938,"external":0.010141372680664062},"user":"unauthenticated"}
+[2025-07-09T05:54:04.618Z] [INFO] Worker 11448 - Server running on port 5000
+[2025-07-09T05:54:09.452Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"1259.68ms","statusCode":200,"memoryIncreaseMB":{"rss":3.54296875,"heapTotal":0.25,"heapUsed":0.8490829467773438,"external":0.009244918823242188},"user":"unauthenticated"}
+[2025-07-09T05:54:34.721Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2749.43ms","statusCode":200,"memoryIncreaseMB":{"rss":0.328125,"heapTotal":0.25,"heapUsed":-0.1041259765625,"external":-0.000881195068359375},"user":"unauthenticated"}
+[2025-07-09T05:56:50.193Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2370.19ms","statusCode":200,"memoryIncreaseMB":{"rss":0.04296875,"heapTotal":0,"heapUsed":0.371826171875,"external":0.005518913269042969},"user":"unauthenticated"}
+[2025-07-09T06:05:34.672Z] [INFO] Worker 13196 - Server running on port 5000
+[2025-07-09T06:06:09.583Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2271.68ms","statusCode":200,"memoryIncreaseMB":{"rss":2.37890625,"heapTotal":0,"heapUsed":0.15236663818359375,"external":0.004815101623535156},"user":"unauthenticated"}
+[2025-07-09T06:25:41.639Z] [INFO] Worker 16860 - Server running on port 5000
+[2025-07-09T06:25:54.686Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2362.25ms","statusCode":200,"memoryIncreaseMB":{"rss":-20.07421875,"heapTotal":-26.99609375,"heapUsed":-11.318939208984375,"external":-0.06430721282958984},"user":"unauthenticated"}
+[2025-07-09T06:28:50.647Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"1415.88ms","statusCode":200,"memoryIncreaseMB":{"rss":0.20703125,"heapTotal":0,"heapUsed":-0.20147705078125,"external":0.0025892257690429688},"user":"unauthenticated"}
+[2025-07-09T06:29:59.191Z] [INFO] Worker 17036 - Server running on port 5000
+[2025-07-09T06:59:34.658Z] [INFO] Worker 16400 - Server running on port 5000
+[2025-07-09T07:00:43.678Z] [INFO] Worker 5672 - Server running on port 5000
+[2025-07-09T07:00:54.008Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"1412.02ms","statusCode":200,"memoryIncreaseMB":{"rss":7.4609375,"heapTotal":5,"heapUsed":-10.844291687011719,"external":-0.05502033233642578},"user":"unauthenticated"}
+[2025-07-09T07:05:16.170Z] [INFO] Worker 13588 - Server running on port 5000
+[2025-07-09T07:10:08.752Z] [INFO] Worker 17600 - Server running on port 5000
+[2025-07-09T07:10:33.598Z] [INFO] Worker 3064 - Server running on port 5000
+[2025-07-09T07:10:48.849Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"5721.28ms","statusCode":200,"memoryIncreaseMB":{"rss":3.68359375,"heapTotal":1.25,"heapUsed":0.464813232421875,"external":0.009423255920410156},"user":"unauthenticated"}
+[2025-07-09T07:11:52.648Z] [INFO] Worker 14756 - Server running on port 5000
+[2025-07-09T07:12:56.225Z] [INFO] Worker 15340 - Server running on port 5000
+[2025-07-09T07:13:33.666Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2386.41ms","statusCode":200,"memoryIncreaseMB":{"rss":3.1484375,"heapTotal":0.25,"heapUsed":0.8455276489257812,"external":0.006955146789550781},"user":"unauthenticated"}
+[2025-07-09T07:18:42.538Z] [INFO] Worker 14756 - Server running on port 5000
+[2025-07-09T07:18:50.102Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"906.30ms","statusCode":200,"memoryIncreaseMB":{"rss":2.453125,"heapTotal":0.25,"heapUsed":0.7659835815429688,"external":0.009240150451660156},"user":"unauthenticated"}
+[2025-07-09T07:22:54.112Z] [INFO] Worker 14312 - Server running on port 5000
+[2025-07-09T07:23:17.528Z] [INFO] Worker 13912 - Server running on port 5000
+[2025-07-09T07:23:53.844Z] [INFO] Worker 5712 - Server running on port 5000
+[2025-07-09T07:25:48.248Z] [INFO] Worker 15584 - Server running on port 5000
+[2025-07-09T07:27:16.901Z] [INFO] Worker 18332 - Server running on port 5000
+[2025-07-09T07:27:29.116Z] [INFO] Worker 4188 - Server running on port 5000
+[2025-07-09T07:30:41.194Z] [WARN] Slow request detected: POST /api/v1/auth/auth0 {"responseTime":"2824.43ms","statusCode":200,"memoryIncreaseMB":{"rss":2.81640625,"heapTotal":0.75,"heapUsed":0.1645660400390625,"external":0.0044307708740234375},"user":"unauthenticated"}
+[2025-07-11T07:45:37.539Z] [INFO] Worker 8196 - Server running on port 5000
+[2025-07-11T07:49:36.095Z] [INFO] Worker 2564 - Server running on port 5000
+[2025-07-11T07:50:26.528Z] [INFO] Worker 5152 - Server running on port 5000
+[2025-07-11T07:50:41.906Z] [INFO] Worker 9980 - Server running on port 5000
+[2025-07-11T07:50:43.679Z] [WARN] Slow request detected: GET /api/v1/profiles/me {"responseTime":"521.64ms","statusCode":404,"memoryIncreaseMB":{"rss":0.95703125,"heapTotal":0.25,"heapUsed":0.675872802734375,"external":0.0009555816650390625},"user":"685d714c014360c6589bce7b"}
+[2025-07-11T17:47:49.140Z] [INFO] Worker 15420 - Server running on port 5000
+[2025-07-12T06:05:45.419Z] [INFO] Worker 920 - Server running on port 5000
+[2025-07-12T06:15:57.876Z] [INFO] Worker 4624 - Server running on port 5000
+[2025-07-12T06:18:38.080Z] [INFO] Worker 18804 - Server running on port 5000
+[2025-07-12T06:19:45.222Z] [INFO] Worker 19784 - Server running on port 5000
+[2025-07-12T06:20:21.457Z] [INFO] Worker 15568 - Server running on port 5000
+[2025-07-12T06:22:50.856Z] [INFO] Worker 9688 - Server running on port 5000
+[2025-07-12T06:24:09.949Z] [INFO] Worker 18092 - Server running on port 5000
+[2025-07-12T06:24:16.028Z] [INFO] Worker 16956 - Server running on port 5000
+[2025-07-12T06:24:23.021Z] [INFO] Worker 20164 - Server running on port 5000
+[2025-07-12T06:25:44.400Z] [INFO] Worker 20092 - Server running on port 5000
+[2025-07-12T06:42:04.398Z] [INFO] Worker 18580 - Server running on port 5000
+[2025-07-12T06:42:19.171Z] [INFO] Worker 8768 - Server running on port 5000
+[2025-07-12T06:44:11.418Z] [INFO] Worker 20940 - Server running on port 5000
+[2025-07-12T06:45:31.760Z] [INFO] Worker 9860 - Server running on port 5000
+[2025-07-12T06:51:29.480Z] [INFO] Worker 16320 - Server running on port 5000
+[2025-07-12T06:51:44.062Z] [INFO] Worker 15820 - Server running on port 5000
+[2025-07-12T06:52:25.827Z] [INFO] Worker 20940 - Server running on port 5000
+[2025-07-12T06:52:44.495Z] [INFO] Worker 1792 - Server running on port 5000
+[2025-07-12T06:53:21.616Z] [INFO] Worker 2400 - Server running on port 5000
+[2025-07-12T06:54:07.485Z] [INFO] Worker 18820 - Server running on port 5000
+[2025-07-12T06:54:34.816Z] [INFO] Worker 8484 - Server running on port 5000
+[2025-07-12T06:58:13.093Z] [INFO] Worker 19388 - Server running on port 5000
+[2025-07-12T06:59:50.853Z] [INFO] Worker 9512 - Server running on port 5000
+[2025-07-12T07:00:14.660Z] [INFO] Worker 988 - Server running on port 5000
+[2025-07-12T07:00:31.770Z] [INFO] Worker 18856 - Server running on port 5000
+[2025-07-12T07:01:57.498Z] [INFO] Worker 7356 - Server running on port 5000
+[2025-07-12T07:02:54.554Z] [INFO] Worker 6532 - Server running on port 5000
+[2025-07-12T07:03:37.125Z] [INFO] Worker 21480 - Server running on port 5000
+[2025-07-12T07:07:48.846Z] [INFO] Worker 20328 - Server running on port 5000
+[2025-07-12T07:18:06.081Z] [INFO] Worker 11628 - Server running on port 5000
+[2025-07-12T07:18:26.003Z] [INFO] Worker 352 - Server running on port 5000
+[2025-07-12T07:18:50.090Z] [INFO] Worker 19512 - Server running on port 5000
+[2025-07-12T07:19:44.607Z] [INFO] Worker 5956 - Server running on port 5000
+[2025-07-12T07:24:18.374Z] [INFO] Worker 800 - Server running on port 5000
+[2025-07-12T07:26:10.699Z] [INFO] Worker 3288 - Server running on port 5000
+[2025-07-12T07:27:55.403Z] [INFO] Worker 21488 - Server running on port 5000
+[2025-07-12T07:28:59.052Z] [INFO] Worker 17756 - Server running on port 5000
+[2025-07-12T07:29:18.560Z] [INFO] Worker 10252 - Server running on port 5000
+[2025-07-12T07:30:15.484Z] [INFO] Worker 18436 - Server running on port 5000
+[2025-07-12T07:30:39.934Z] [INFO] Worker 10744 - Server running on port 5000
+[2025-07-12T07:31:13.048Z] [INFO] Worker 7688 - Server running on port 5000
+[2025-07-12T07:31:21.450Z] [INFO] Worker 21088 - Server running on port 5000
+[2025-07-12T07:31:51.301Z] [INFO] Worker 17004 - Server running on port 5000
+[2025-07-12T07:32:55.860Z] [INFO] Worker 19856 - Server running on port 5000
+[2025-07-12T07:33:26.195Z] [INFO] Worker 11524 - Server running on port 5000
+[2025-07-12T07:34:12.303Z] [INFO] Worker 1948 - Server running on port 5000
+[2025-07-12T07:34:49.636Z] [INFO] Worker 10856 - Server running on port 5000
+[2025-07-12T07:39:59.589Z] [INFO] Worker 1732 - Server running on port 5000
+[2025-07-12T07:40:47.831Z] [INFO] Worker 18868 - Server running on port 5000
+[2025-07-12T07:41:12.164Z] [INFO] Worker 18372 - Server running on port 5000
+[2025-07-12T08:29:04.846Z] [INFO] Worker 19548 - Server running on port 5000
+[2025-07-12T11:30:48.655Z] [INFO] Worker 19636 - Server running on port 5000
+[2025-07-12T11:38:24.285Z] [INFO] Worker 15452 - Server running on port 5000
+[2025-07-12T11:45:01.640Z] [INFO] Worker 21220 - Server running on port 5000
+[2025-07-12T11:57:35.886Z] [WARN] Slow request detected: POST /api/v1/profiles/resume/upload {"responseTime":"6246.45ms","statusCode":200,"memoryIncreaseMB":{"rss":10.52734375,"heapTotal":0.5,"heapUsed":0.5107269287109375,"external":0.43703651428222656},"user":"685d714c014360c6589bce7b"}
+[2025-07-12T11:59:04.824Z] [INFO] Worker 20700 - Server running on port 5000
+[2025-07-12T11:59:11.604Z] [INFO] Worker 1460 - Server running on port 5000
+[2025-07-12T12:02:02.835Z] [INFO] Worker 18780 - Server running on port 5000
+[2025-07-12T12:02:37.492Z] [INFO] Worker 13024 - Server running on port 5000
+[2025-07-12T12:03:26.303Z] [WARN] Slow request detected: PUT /api/v1/profiles/personal {"responseTime":"8467.30ms","statusCode":200,"memoryIncreaseMB":{"rss":5.25390625,"heapTotal":0.75,"heapUsed":1.653350830078125,"external":1.0771112442016602},"user":"685d714c014360c6589bce7b"}
+[2025-07-12T14:41:56.780Z] [INFO] Worker 9488 - Server running on port 5000
+[2025-07-12T14:44:13.465Z] [INFO] Worker 2164 - Server running on port 5000

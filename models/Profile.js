@@ -41,6 +41,9 @@ const ProfileSchema = new mongoose.Schema(
         enum: ["male", "female", "other", "prefer not to say"],
       },
       languages: [String],
+      visaStatus: {
+        type: String,
+      },
     },
 
     // Public profile information
@@ -82,7 +85,6 @@ const ProfileSchema = new mongoose.Schema(
 
       resume: {
         type: String,
-        default: "default-resume.pdf",
       },
       resume_public_id: {
         type: String,
@@ -146,6 +148,9 @@ ProfileSchema.statics.getCompleteProfile = async function (userId) {
     .populate("favorites.listings")
     .populate("public.ads")
     .populate("public.ratings")
+    .select(
+      "user personal.avatar personal.bio personal.dateOfBirth personal.gender personal.languages personal.location personal.visaStatus personal.profileEmail personal.profilePhoneNumber jobProfile public favorites"
+    ) // Explicitly select all fields we need including visaStatus
     .lean();
 };
 
@@ -154,7 +159,7 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
   return this.findOne({ user: userId })
     .populate("user", "name")
     .select(
-      "public personal.avatar personal.bio personal.location personal.dateOfBirth personal.languages"
+      "public personal.avatar personal.bio personal.location personal.dateOfBirth personal.languages personal.visaStatus"
     )
     .lean();
 };
@@ -163,10 +168,9 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
 ProfileSchema.statics.getJobProfile = async function (userId) {
   return this.findOne({ user: userId })
     .populate("user", "name email phoneNumber")
-    .select({
-      jobProfile: 1,
-      personal: 1,
-    })
+    .select(
+      "jobProfile personal.avatar personal.bio personal.dateOfBirth personal.gender personal.languages personal.location personal.visaStatus personal.profileEmail personal.profilePhoneNumber"
+    )
     .lean();
 };
 

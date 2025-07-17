@@ -9,6 +9,7 @@ export const socketHandler = (io) => {
 
     socket.on("join-chat", (chatId) => {
       socket.join(chatId);
+      console.log(`Socket ${socket.id} joined chat: ${chatId}`);
     });
 
     socket.on("send-message", async (message) => {
@@ -16,6 +17,7 @@ export const socketHandler = (io) => {
         const { chatId, content, sender } = message;
         const newMessage = await sendMessage(chatId, content, sender);
         io.to(chatId).emit("new-message", newMessage);
+        console.log(`Message sent in chat ${chatId}:`, newMessage);
       } catch (error) {
         console.error("Error sending message:", error);
         socket.emit("error", { message: "Failed to send message" });
@@ -33,11 +35,11 @@ export const socketHandler = (io) => {
     });
 
     socket.on("typing", (chatId, userId) => {
-      socket.to(chatId).emit("user-typing", { userId });
+      socket.to(chatId).emit("user-typing", userId);
     });
 
     socket.on("stop-typing", (chatId, userId) => {
-      socket.to(chatId).emit("user-stop-typing", { userId });
+      socket.to(chatId).emit("user-stop-typing", userId);
     });
 
     socket.on("leave-chat", (chatId) => {
