@@ -79,6 +79,9 @@ if (
 } else {
   const app = express();
 
+  // Trust proxy - important for rate limiting behind reverse proxy (Render, Heroku, etc.)
+  app.set("trust proxy", 1);
+
   app.use(helmet());
   app.use(compression());
   app.use(express.json({ limit: "1mb" }));
@@ -112,6 +115,8 @@ if (
     skipFailedRequests: true, // Don't count failed requests
     // Memory optimization - smaller window for memory store
     max: process.env.NODE_ENV === "production" ? 50 : 100,
+    // Skip favicon requests to prevent unnecessary rate limiting
+    skip: (req) => req.url === "/favicon.ico",
     handler: (req, res, next, options) => {
       logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
       res.status(options.statusCode).json({
@@ -165,6 +170,11 @@ if (
       version: "1.0",
       serverTime: new Date().toISOString(),
     });
+  });
+
+  // Handle favicon requests to prevent 404 errors
+  app.get("/favicon.ico", (req, res) => {
+    res.status(204).send();
   });
 
   app.get("/api/health", (req, res) => {
