@@ -64,6 +64,14 @@ const UserSchema = new mongoose.Schema(
       enum: ["email", "google-oauth2", "apple", "auth0", "local"],
       default: "email",
     },
+    fcmTokens: [
+      {
+        token: { type: String, required: true },
+        deviceId: String,
+        userAgent: String,
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: true,

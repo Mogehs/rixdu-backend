@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import Application from "./Application.js";
+import Listing from "./Listing.js";
 
 const ProfileSchema = new mongoose.Schema(
   {
@@ -58,6 +60,24 @@ const ProfileSchema = new mongoose.Schema(
         {
           type: mongoose.Schema.Types.ObjectId,
           ref: "Rating",
+        },
+      ],
+      jobPosts: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Listing",
+        },
+      ],
+      applications: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Listing",
+        },
+      ],
+      appliedFor: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Listing",
         },
       ],
     },
@@ -156,12 +176,61 @@ ProfileSchema.statics.getCompleteProfile = async function (userId) {
 
 // Method to get only public profile information
 ProfileSchema.statics.getPublicProfile = async function (userId) {
-  return this.findOne({ user: userId })
+  const profile = await this.findOne({ user: userId })
     .populate("user", "name")
+    .populate({
+      path: "public.ads",
+      select: "values images categoryId createdAt updatedAt slug",
+      populate: {
+        path: "categoryId",
+        select: "name",
+      },
+    })
+    .populate({
+      path: "public.jobPosts",
+      select: "values images categoryId createdAt updatedAt slug",
+      populate: {
+        path: "categoryId",
+        select: "name",
+      },
+    })
+    .populate({
+      path: "public.applications",
+      select: "values images categoryId createdAt updatedAt slug",
+      populate: {
+        path: "categoryId",
+        select: "name",
+      },
+    })
+    .populate("public.ratings")
     .select(
       "public personal.avatar personal.bio personal.location personal.dateOfBirth personal.languages personal.visaStatus"
     )
     .lean();
+
+  if (profile) {
+    // Get received applications for this user's job posts
+    const Application = mongoose.model("Application");
+    const Listing = mongoose.model("Listing");
+
+    // Find all job posts by this user
+    const userJobPosts = await Listing.find({ userId: userId }).select("_id");
+    const jobPostIds = userJobPosts.map((job) => job._id);
+
+    // Find all applications for those job posts
+    const receivedApplications = await Application.find({
+      job: { $in: jobPostIds },
+    })
+      .populate("applicant", "name email phoneNumber")
+      .populate("job", "values.title values.company slug")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Add receivedApplications to the profile
+    profile.public.receivedApplications = receivedApplications;
+  }
+
+  return profile;
 };
 
 // Method to get job profile
@@ -201,9 +270,8 @@ ProfileSchema.statics.getUserFavorites = async function (userId) {
   return this.findOne({ user: userId })
     .populate({
       path: "favorites.listings",
-      select: "title description price images category location createdAt",
       populate: {
-        path: "category",
+        path: "categoryId",
         select: "name",
       },
     })

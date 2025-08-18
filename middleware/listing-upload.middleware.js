@@ -39,23 +39,50 @@ export const processFileUploads = async (req, res, next) => {
 
     req.body.values = req.body.values || {};
 
-    const filePromises = req.files.map(async (file) => {
-      const fieldName = file.fieldname.replace("file_", "");
+    // Parse the file field mapping sent from frontend
+    let fileFieldMapping = {};
+    if (req.body.fileFieldMapping) {
+      try {
+        fileFieldMapping = JSON.parse(req.body.fileFieldMapping);
+      } catch (err) {
+        console.error("Error parsing file field mapping:", err);
+      }
+    }
+
+    // Group files by field name using the mapping
+    const filesByField = {};
+
+    const filePromises = req.files.map(async (file, index) => {
+      // Get the field name from the mapping, or use a default
+      const fieldName = fileFieldMapping[index] || `file_${index}`;
 
       const folder = `listings/${req.body.categoryId || "misc"}`;
       const result = await uploadToCloudinary(file, folder);
 
       if (result) {
-        req.body.values[fieldName] = {
+        const fileData = {
           url: result.url,
           public_id: result.public_id,
           originalName: file.originalname,
           mimeType: file.mimetype,
         };
+
+        // Group files by field name
+        if (!filesByField[fieldName]) {
+          filesByField[fieldName] = [];
+        }
+        filesByField[fieldName].push(fileData);
       }
     });
 
     await Promise.all(filePromises);
+    Object.entries(filesByField).forEach(([fieldName, files]) => {
+      if (files.length === 1) {
+        req.body.values[fieldName] = files[0];
+      } else {
+        req.body.values[fieldName] = files;
+      }
+    });
 
     if (
       typeof req.body.values === "object" &&

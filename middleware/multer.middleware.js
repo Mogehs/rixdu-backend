@@ -26,6 +26,25 @@ export const upload = multer({
   },
 });
 
+// Multiple file upload for garage gallery
+export const uploadMultiple = (fieldName, maxCount = 10) => {
+  return multer({
+    storage,
+    fileFilter: (req, file, cb) => {
+      // Only accept images for garage uploads
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed for garage uploads.'), false);
+      }
+    },
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB per file
+      files: maxCount,
+    },
+  }).array(fieldName, maxCount);
+};
+
 // Specific middleware for resume uploads (PDF, DOC, DOCX)
 export const resumeUpload = multer({
   storage,

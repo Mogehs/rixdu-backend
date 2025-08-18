@@ -7,6 +7,13 @@ export const socketHandler = (io) => {
   io.on("connection", (socket) => {
     console.log(`New socket connected: ${socket.id}`);
 
+    socket.on("join-user", (userId) => {
+      if (userId) {
+        socket.join(`user:${userId}`);
+        console.log(`Socket ${socket.id} joined user room: user:${userId}`);
+      }
+    });
+
     socket.on("join-chat", (chatId) => {
       socket.join(chatId);
       console.log(`Socket ${socket.id} joined chat: ${chatId}`);

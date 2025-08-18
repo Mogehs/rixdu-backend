@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 
@@ -14,7 +15,11 @@ export const getOrCreateChat = async (req, res) => {
     })
       .populate({
         path: "listing",
-        select: "values",
+        select: "values slug storeId",
+        populate: {
+          path: "storeId",
+          select: "name slug icon",
+        },
       })
       .populate("sender")
       .populate("receiver");
@@ -33,7 +38,11 @@ export const getOrCreateChat = async (req, res) => {
       chat = await Chat.findById(chat._id)
         .populate({
           path: "listing",
-          select: "values",
+          select: "values slug storeId",
+          populate: {
+            path: "storeId",
+            select: "name slug icon",
+          },
         })
         .populate("sender")
         .populate("receiver");
@@ -50,12 +59,25 @@ export const getChatById = async (req, res) => {
   const { chatId } = req.params;
 
   try {
-    const chat = await Chat.findById(chatId)
+    let query = {};
+
+    // Check if chatId is a valid ObjectId or treat as slug
+    if (mongoose.Types.ObjectId.isValid(chatId)) {
+      query._id = chatId;
+    } else {
+      query.slug = chatId;
+    }
+
+    const chat = await Chat.findOne(query)
       .populate("sender")
       .populate("receiver")
       .populate({
         path: "listing",
-        select: "values",
+        select: "values slug storeId",
+        populate: {
+          path: "storeId",
+          select: "name slug icon",
+        },
       });
 
     if (!chat) {
@@ -65,6 +87,33 @@ export const getChatById = async (req, res) => {
     res.status(200).json(chat);
   } catch (error) {
     console.error("Error in getChatById:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getChatBySlug = async (req, res) => {
+  const { slug } = req.params;
+
+  try {
+    const chat = await Chat.findOne({ slug })
+      .populate("sender")
+      .populate("receiver")
+      .populate({
+        path: "listing",
+        select: "values slug storeId",
+        populate: {
+          path: "storeId",
+          select: "name slug icon",
+        },
+      });
+
+    if (!chat) {
+      return res.status(404).json({ message: "Chat not found" });
+    }
+
+    res.status(200).json(chat);
+  } catch (error) {
+    console.error("Error in getChatBySlug:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -80,7 +129,11 @@ export const getUserChats = async (req, res) => {
       .populate("receiver")
       .populate({
         path: "listing",
-        select: "values",
+        select: "values slug storeId",
+        populate: {
+          path: "storeId",
+          select: "name slug icon",
+        },
       })
       .lean()
       .sort({ lastMessageAt: -1 });

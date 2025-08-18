@@ -1,11 +1,10 @@
-import mongoose from 'mongoose';
-import Profile from '../models/Profile.js';
-import User from '../models/User.js';
+import mongoose from "mongoose";
+import Profile from "../models/Profile.js";
 import {
   uploadUserAvatar,
   uploadUserResume,
   deleteResourceFromCloudinary,
-} from '../utils/cloudinaryUpload.js';
+} from "../utils/cloudinaryUpload.js";
 
 // Get complete profile
 export const getCompleteProfile = async (req, res) => {
@@ -17,7 +16,7 @@ export const getCompleteProfile = async (req, res) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Profile not found',
+        message: "Profile not found",
       });
     }
 
@@ -29,7 +28,7 @@ export const getCompleteProfile = async (req, res) => {
     console.error(`Error fetching profile: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error fetching profile. Please try again.',
+      message: "Server error fetching profile. Please try again.",
     });
   }
 };
@@ -42,7 +41,7 @@ export const getPublicProfile = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required',
+        message: "User ID is required",
       });
     }
 
@@ -51,7 +50,7 @@ export const getPublicProfile = async (req, res) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Public profile not found',
+        message: "Public profile not found",
       });
     }
 
@@ -63,7 +62,7 @@ export const getPublicProfile = async (req, res) => {
     console.error(`Error fetching public profile: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error fetching public profile. Please try again.',
+      message: "Server error fetching public profile. Please try again.",
     });
   }
 };
@@ -78,7 +77,7 @@ export const getJobProfile = async (req, res) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Job profile not found',
+        message: "Job profile not found",
       });
     }
 
@@ -90,7 +89,7 @@ export const getJobProfile = async (req, res) => {
     console.error(`Error fetching job profile: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error fetching job profile. Please try again.',
+      message: "Server error fetching job profile. Please try again.",
     });
   }
 };
@@ -105,7 +104,7 @@ export const getProfessionalProfile = async (req, res) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Professional profile not found',
+        message: "Professional profile not found",
       });
     }
 
@@ -117,7 +116,7 @@ export const getProfessionalProfile = async (req, res) => {
     console.error(`Error fetching professional profile: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error fetching professional profile. Please try again.',
+      message: "Server error fetching professional profile. Please try again.",
     });
   }
 };
@@ -126,7 +125,7 @@ export const getProfessionalProfile = async (req, res) => {
 export const updatePersonalProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('COMPLETE REQUEST BODY:', req.body);
+    console.log("COMPLETE REQUEST BODY:", req.body);
     const {
       profileEmail,
       profilePhoneNumber,
@@ -138,7 +137,7 @@ export const updatePersonalProfile = async (req, res) => {
       visaStatus,
     } = req.body;
 
-    console.log('Request body in updatePersonalProfile:', {
+    console.log("Request body in updatePersonalProfile:", {
       fullBody: req.body,
       hasVisaStatus: req.body.visaStatus !== undefined,
       visaStatus: req.body.visaStatus,
@@ -157,11 +156,11 @@ export const updatePersonalProfile = async (req, res) => {
     if (req.file) {
       if (
         profile.personal.avatar_public_id &&
-        !profile.personal.avatar.includes('default-avatar')
+        !profile.personal.avatar.includes("default-avatar")
       ) {
         await deleteResourceFromCloudinary(
           profile.personal.avatar_public_id,
-          'image'
+          "image"
         );
       }
 
@@ -175,10 +174,10 @@ export const updatePersonalProfile = async (req, res) => {
     // Update profile email and phone number
     if (profileEmail !== undefined) {
       // Validate email format if provided and not empty
-      if (profileEmail && profileEmail.trim() !== '') {
+      if (profileEmail && profileEmail.trim() !== "") {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-        console.log('Validating email:', {
+        console.log("Validating email:", {
           value: profileEmail,
           isValid: emailRegex.test(profileEmail),
         });
@@ -186,7 +185,7 @@ export const updatePersonalProfile = async (req, res) => {
         if (!emailRegex.test(profileEmail)) {
           return res.status(400).json({
             success: false,
-            message: 'Invalid email format for profile email',
+            message: "Invalid email format for profile email",
           });
         }
       }
@@ -195,17 +194,11 @@ export const updatePersonalProfile = async (req, res) => {
 
     if (profilePhoneNumber !== undefined) {
       // Validate phone number format if provided and not empty
-      if (profilePhoneNumber && profilePhoneNumber.trim() !== '') {
-        // Use a more lenient regex that accepts international formats
-        // This accepts:
-        // - Optional + at the beginning
-        // - Optional country code (1-3 digits)
-        // - Area codes and numbers with optional separators (, -, spaces, parentheses)
-        // - At least 7 digits in total (excluding separators)
+      if (profilePhoneNumber && profilePhoneNumber.trim() !== "") {
         const phoneRegex = /^[+]?[\d\s()\-]{7,20}$/;
-        const cleanedNumber = profilePhoneNumber.replace(/[\s\-()]/g, '');
+        const cleanedNumber = profilePhoneNumber.replace(/[\s\-()]/g, "");
 
-        console.log('Validating phone number:', {
+        console.log("Validating phone number:", {
           original: profilePhoneNumber,
           cleaned: cleanedNumber,
           isValid: phoneRegex.test(profilePhoneNumber),
@@ -214,7 +207,7 @@ export const updatePersonalProfile = async (req, res) => {
         if (!phoneRegex.test(profilePhoneNumber)) {
           return res.status(400).json({
             success: false,
-            message: 'Invalid phone number format for profile phone number',
+            message: "Invalid phone number format for profile phone number",
           });
         }
       }
@@ -228,26 +221,18 @@ export const updatePersonalProfile = async (req, res) => {
         const parsedDate = new Date(dateOfBirth);
         if (!isNaN(parsedDate.getTime())) {
           profile.personal.dateOfBirth = parsedDate;
-          console.log('Valid date parsed:', {
+          console.log("Valid date parsed:", {
             original: dateOfBirth,
             parsed: parsedDate,
           });
         } else {
-          console.warn('Invalid date format ignored:', dateOfBirth);
+          console.warn("Invalid date format ignored:", dateOfBirth);
         }
       } catch (dateError) {
-        console.error('Date parsing error:', dateError.message);
+        console.error("Date parsing error:", dateError.message);
       }
     }
     if (gender) profile.personal.gender = gender;
-
-    // Enhanced language handling - support both array and JSON string
-    console.log('Languages received:', {
-      value: languages,
-      type: typeof languages,
-      isArray: Array.isArray(languages),
-      rawBody: req.body.languages,
-    });
 
     try {
       // Initialize as empty array
@@ -255,21 +240,21 @@ export const updatePersonalProfile = async (req, res) => {
 
       if (languages) {
         // Check if languages is a JSON string
-        if (typeof languages === 'string' && languages.startsWith('[')) {
+        if (typeof languages === "string" && languages.startsWith("[")) {
           try {
             // Try to parse as JSON
             const parsedLangs = JSON.parse(languages);
             if (Array.isArray(parsedLangs)) {
               profile.personal.languages = parsedLangs.filter(
-                (lang) => typeof lang === 'string' && lang.trim() !== ''
+                (lang) => typeof lang === "string" && lang.trim() !== ""
               );
               console.log(
-                'Languages parsed from JSON:',
+                "Languages parsed from JSON:",
                 profile.personal.languages
               );
             }
           } catch (jsonError) {
-            console.error('JSON parse error for languages:', jsonError.message);
+            console.error("JSON parse error for languages:", jsonError.message);
             // Fall through to the next handling approach
           }
         }
@@ -277,13 +262,13 @@ export const updatePersonalProfile = async (req, res) => {
         // If not processed as JSON (or parsing failed), handle as before
         if (profile.personal.languages.length === 0) {
           // Convert string to array if it's a single string
-          if (typeof languages === 'string' && languages.trim() !== '') {
+          if (typeof languages === "string" && languages.trim() !== "") {
             // Split by comma if it contains commas
-            if (languages.includes(',')) {
+            if (languages.includes(",")) {
               profile.personal.languages = languages
-                .split(',')
+                .split(",")
                 .map((lang) => lang.trim())
-                .filter((lang) => lang !== '');
+                .filter((lang) => lang !== "");
             } else {
               profile.personal.languages = [languages.trim()];
             }
@@ -292,15 +277,15 @@ export const updatePersonalProfile = async (req, res) => {
           else if (Array.isArray(languages)) {
             // Filter out empty strings
             profile.personal.languages = languages.filter(
-              (lang) => typeof lang === 'string' && lang.trim() !== ''
+              (lang) => typeof lang === "string" && lang.trim() !== ""
             );
           }
         }
       }
 
-      console.log('Languages processed:', profile.personal.languages);
+      console.log("Languages processed:", profile.personal.languages);
     } catch (langError) {
-      console.error('Error processing languages:', langError);
+      console.error("Error processing languages:", langError);
       // Default to empty array on error
       profile.personal.languages = [];
     }
@@ -308,35 +293,35 @@ export const updatePersonalProfile = async (req, res) => {
     // Handle visa status
     // Access visa status directly from req.body to avoid destructuring issues
     const rawVisaStatus = req.body.visaStatus;
-    console.log('Handling visa status:', {
+    console.log("Handling visa status:", {
       visaStatus,
       rawVisaStatus: rawVisaStatus,
       typeFromDestructured: typeof visaStatus,
       typeFromRawBody: typeof rawVisaStatus,
-      hasVisaStatusInBody: 'visaStatus' in req.body,
+      hasVisaStatusInBody: "visaStatus" in req.body,
       bodyKeys: Object.keys(req.body),
       fullBody: req.body,
-      contentType: req.headers['content-type'],
+      contentType: req.headers["content-type"],
     });
 
     // CRITICAL FIX: Always set visa status, even if not in body
-    if ('visaStatus' in req.body) {
+    if ("visaStatus" in req.body) {
       profile.personal.visaStatus = rawVisaStatus;
-      console.log('Setting visa status from request body:', rawVisaStatus);
+      console.log("Setting visa status from request body:", rawVisaStatus);
     } else {
       // If not in body, set to empty string to ensure it's included in the profile
-      profile.personal.visaStatus = '';
+      profile.personal.visaStatus = "";
       console.log(
-        'Visa status not found in request body, setting to empty string'
+        "Visa status not found in request body, setting to empty string"
       );
     }
 
     // Double check that it's set properly
-    console.log('Updated profile visa status to:', {
+    console.log("Updated profile visa status to:", {
       value: profile.personal.visaStatus,
       type: typeof profile.personal.visaStatus,
       keys: Object.keys(profile.personal),
-      hasVisaStatusKey: Object.keys(profile.personal).includes('visaStatus'),
+      hasVisaStatusKey: Object.keys(profile.personal).includes("visaStatus"),
     });
 
     if (location) {
@@ -348,7 +333,7 @@ export const updatePersonalProfile = async (req, res) => {
 
     await profile.save();
 
-    console.log('Profile personal data to be returned:', {
+    console.log("Profile personal data to be returned:", {
       hasVisaStatus: !!profile.personal.visaStatus,
       visaStatus: profile.personal.visaStatus,
       languages: profile.personal.languages,
@@ -367,7 +352,7 @@ export const updatePersonalProfile = async (req, res) => {
       visaStatus:
         profile.personal.visaStatus !== undefined
           ? profile.personal.visaStatus
-          : '',
+          : "",
       // Force include languages as array if undefined
       languages: Array.isArray(profile.personal.languages)
         ? profile.personal.languages
@@ -375,13 +360,13 @@ export const updatePersonalProfile = async (req, res) => {
     };
 
     // Double check that visa status is included
-    if (!('visaStatus' in responseData)) {
-      responseData.visaStatus = '';
-      console.log('Manually adding missing visaStatus field to response');
+    if (!("visaStatus" in responseData)) {
+      responseData.visaStatus = "";
+      console.log("Manually adding missing visaStatus field to response");
     }
 
-    console.log('Final response data:', {
-      hasVisaStatus: 'visaStatus' in responseData,
+    console.log("Final response data:", {
+      hasVisaStatus: "visaStatus" in responseData,
       visaStatus: responseData.visaStatus,
       visaStatusType: typeof responseData.visaStatus,
       allKeys: Object.keys(responseData),
@@ -399,18 +384,18 @@ export const updatePersonalProfile = async (req, res) => {
     // Log specific fields to diagnose issues
     if (req.body.dateOfBirth) {
       try {
-        console.log('Date conversion test:', {
+        console.log("Date conversion test:", {
           original: req.body.dateOfBirth,
           parsed: new Date(req.body.dateOfBirth),
         });
       } catch (dateError) {
-        console.error('Date parsing error:', dateError.message);
+        console.error("Date parsing error:", dateError.message);
       }
     }
 
     return res.status(500).json({
       success: false,
-      message: 'Server error updating personal profile. Please try again.',
+      message: "Server error updating personal profile. Please try again.",
       error: error.message, // Add more details for debugging purposes
     });
   }
@@ -419,7 +404,7 @@ export const updatePersonalProfile = async (req, res) => {
 export const updateJobProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('COMPLETE REQUEST BODY:', req.body);
+    console.log("COMPLETE REQUEST BODY:", req.body);
     const {
       qualifications,
       experience,
@@ -442,11 +427,11 @@ export const updateJobProfile = async (req, res) => {
     if (req.file) {
       if (
         profile.jobProfile.resume_public_id &&
-        !profile.jobProfile.resume.includes('default-resume')
+        !profile.jobProfile.resume.includes("default-resume")
       ) {
         await deleteResourceFromCloudinary(
           profile.jobProfile.resume_public_id,
-          'raw'
+          "raw"
         );
       }
 
@@ -495,7 +480,7 @@ export const updateJobProfile = async (req, res) => {
     console.error(`Error updating job profile: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error updating job profile. Please try again.',
+      message: "Server error updating job profile. Please try again.",
     });
   }
 };
@@ -507,7 +492,7 @@ export const uploadResume = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'No resume file provided',
+        message: "No resume file provided",
       });
     }
 
@@ -522,11 +507,11 @@ export const uploadResume = async (req, res) => {
 
     if (
       profile.jobProfile.resume_public_id &&
-      !profile.jobProfile.resume.includes('default-resume')
+      !profile.jobProfile.resume.includes("default-resume")
     ) {
       await deleteResourceFromCloudinary(
         profile.jobProfile.resume_public_id,
-        'raw'
+        "raw"
       );
     }
 
@@ -547,7 +532,7 @@ export const uploadResume = async (req, res) => {
     console.error(`Error uploading resume: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error uploading resume. Please try again.',
+      message: "Server error uploading resume. Please try again.",
     });
   }
 };
@@ -556,13 +541,12 @@ export const uploadResume = async (req, res) => {
 export const addToFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('COMPLETE REQUEST BODY:', req.body);
     const { listingId } = req.body;
 
     if (!listingId) {
       return res.status(400).json({
         success: false,
-        message: 'Listing ID is required',
+        message: "Listing ID is required",
       });
     }
 
@@ -575,6 +559,13 @@ export const addToFavorites = async (req, res) => {
           listings: [listingId],
         },
       });
+
+      return res.status(200).json({
+        success: true,
+        message: "Added to favorites successfully",
+        status: "added",
+        listingId,
+      });
     } else {
       const isAlreadyFavorite = profile.favorites.listings.some(
         (listing) => listing.toString() === listingId
@@ -583,18 +574,30 @@ export const addToFavorites = async (req, res) => {
       if (!isAlreadyFavorite) {
         profile.favorites.listings.push(listingId);
         await profile.save();
+        return res.status(200).json({
+          success: true,
+          message: "Added to favorites successfully",
+          status: "added",
+          listingId,
+        });
+      }
+
+      if (isAlreadyFavorite) {
+        profile.favorites.listings.pull(listingId);
+        await profile.save();
+        return res.status(200).json({
+          success: true,
+          message: "Removed from favorites successfully",
+          status: "removed",
+          listingId,
+        });
       }
     }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Added to favorites successfully',
-    });
   } catch (error) {
     console.error(`Error adding to favorites: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error adding to favorites. Please try again.',
+      message: "Server error adding to favorites. Please try again.",
     });
   }
 };
@@ -603,7 +606,7 @@ export const addToFavorites = async (req, res) => {
 export const removeFromFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('COMPLETE REQUEST BODY:', req.body);
+    console.log("COMPLETE REQUEST BODY:", req.body);
     const { listingId } = req.params;
 
     const profile = await Profile.findOne({ user: userId });
@@ -611,7 +614,7 @@ export const removeFromFavorites = async (req, res) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Profile not found',
+        message: "Profile not found",
       });
     }
 
@@ -624,13 +627,13 @@ export const removeFromFavorites = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Removed from favorites successfully',
+      message: "Removed from favorites successfully",
     });
   } catch (error) {
     console.error(`Error removing from favorites: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error removing from favorites. Please try again.',
+      message: "Server error removing from favorites. Please try again.",
     });
   }
 };
@@ -638,15 +641,13 @@ export const removeFromFavorites = async (req, res) => {
 // Get user favorites
 export const getUserFavorites = async (req, res) => {
   try {
-    console.log(`Fetching favorites for user: ${req.user.id}`);
-
     const userId = req.params.userId || req.user.id;
 
     // Validate that userId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid user ID format',
+        message: "Invalid user ID format",
       });
     }
 
@@ -655,7 +656,7 @@ export const getUserFavorites = async (req, res) => {
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Profile not found',
+        message: "Profile not found",
       });
     }
 
@@ -668,7 +669,7 @@ export const getUserFavorites = async (req, res) => {
     console.error(`Error fetching user favorites: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error fetching favorites. Please try again.',
+      message: "Server error fetching favorites. Please try again.",
     });
   }
 };
@@ -676,18 +677,18 @@ export const getUserFavorites = async (req, res) => {
 // Search users by skills
 export const searchUsersBySkills = async (req, res) => {
   try {
-    console.log('COMPLETE REQUEST BODY:', req.body);
+    console.log("COMPLETE REQUEST BODY:", req.body);
     const { skills, limit } = req.query;
 
     if (!skills) {
       return res.status(400).json({
         success: false,
-        message: 'Skills are required for search',
+        message: "Skills are required for search",
       });
     }
 
     const skillsArray = skills
-      .split(',')
+      .split(",")
       .map((skill) => skill.trim().toLowerCase());
     const limitNum = parseInt(limit) || 10;
 
@@ -702,7 +703,7 @@ export const searchUsersBySkills = async (req, res) => {
     console.error(`Error searching users by skills: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error searching users. Please try again.',
+      message: "Server error searching users. Please try again.",
     });
   }
 };
@@ -726,6 +727,6 @@ export const createProfile = async (userId) => {
     return profile;
   } catch (error) {
     console.error(`Error creating profile: ${error.message}`);
-    throw new Error('Failed to create profile');
+    throw new Error("Failed to create profile");
   }
 };

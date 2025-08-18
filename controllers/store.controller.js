@@ -43,7 +43,109 @@ export const createStore = async (req, res) => {
 
 export const getStores = async (req, res) => {
   try {
+    const { level, root } = req.query;
     const stores = await Store.findAllStores();
+
+    if (root === "true") {
+      const storesWithCategories = await Promise.all(
+        stores.map(async (store) => {
+          const categories = await Category.find({
+            storeId: store._id,
+          })
+            .select("name slug icon isLeaf childrenCount level parent")
+            .sort({ level: 1, name: 1 })
+            .lean();
+
+          // Build tree structure
+          const buildTree = (categories) => {
+            const categoryMap = new Map();
+            const roots = [];
+
+            // Create a map of all categories
+            categories.forEach((category) => {
+              categoryMap.set(category._id.toString(), {
+                ...category,
+                children: [],
+              });
+            });
+
+            // Build the tree structure
+            categories.forEach((category) => {
+              const categoryWithChildren = categoryMap.get(
+                category._id.toString()
+              );
+
+              if (category.parent) {
+                const parent = categoryMap.get(category.parent.toString());
+                if (parent) {
+                  parent.children.push(categoryWithChildren);
+                }
+              } else {
+                // Root level category
+                roots.push(categoryWithChildren);
+              }
+            });
+
+            return roots;
+          };
+
+          const categoryTree = buildTree(categories);
+
+          return {
+            ...store,
+            categories: categoryTree,
+            isRootRequest: true,
+            categoryCount: categories.length,
+          };
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        count: storesWithCategories.length,
+        data: storesWithCategories,
+        isRootRequest: true,
+      });
+    }
+
+    // If level parameter is provided, fetch categories by level for all stores
+    if (level !== undefined) {
+      const levelNum = parseInt(level);
+
+      if (isNaN(levelNum) || levelNum < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Level must be a non-negative number",
+        });
+      }
+
+      // Fetch categories for all stores from level 0 to the specified level
+      const storesWithCategories = await Promise.all(
+        stores.map(async (store) => {
+          const categories = await Category.find({
+            storeId: store._id,
+            level: { $lte: levelNum },
+          })
+            .select("name slug icon isLeaf childrenCount level parent")
+            .sort({ level: 1, name: 1 })
+            .lean();
+
+          return {
+            ...store,
+            categories,
+            categoryLevel: levelNum,
+            categoryCount: categories.length,
+          };
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        count: storesWithCategories.length,
+        data: storesWithCategories,
+        categoryLevel: levelNum,
+      });
+    }
 
     return res.status(200).json({
       success: true,

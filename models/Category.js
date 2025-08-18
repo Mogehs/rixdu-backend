@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 const fieldSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    label: { type: String, required: true },
     type: {
       type: String,
       required: true,
@@ -13,6 +12,7 @@ const fieldSchema = new mongoose.Schema(
         "select",
         "date",
         "checkbox",
+        "radio",
         "file",
         "input",
         "point",
@@ -24,6 +24,7 @@ const fieldSchema = new mongoose.Schema(
     multiple: { type: Boolean, default: false },
     maxSize: { type: Number },
     maxFiles: { type: Number, default: 1 },
+    minFiles: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -101,6 +102,39 @@ categorySchema.pre("save", async function (next) {
 
     this.updatedAt = Date.now();
 
+    if (this.isLeaf && (!this.fields || this.fields.length === 0)) {
+      this.fields = [
+        {
+          name: "title",
+          type: "input",
+          required: true,
+        },
+        {
+          name: "description",
+          type: "text",
+          required: true,
+        },
+        {
+          name: "price",
+          type: "number",
+          required: true,
+        },
+        {
+          name: "files",
+          type: "file",
+          required: true,
+          multiple: true,
+          maxFiles: 12,
+          minFiles: 1,
+        },
+        {
+          name: "location",
+          type: "point",
+          required: true,
+        },
+      ];
+    }
+
     if (this.parent && this.isModified("parent")) {
       const parent = await mongoose.model("Category").findById(this.parent);
 
@@ -157,6 +191,7 @@ categorySchema.statics.getFullHierarchy = async function (storeId) {
         childrenCount: 1,
         slug: 1,
         icon: 1,
+        fields: 1,
       },
     },
   ]);

@@ -19,6 +19,10 @@ import profileRoutes from "./routes/profile.routes.js";
 import ratingRoutes from "./routes/rating.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import messagesRoutes from "./routes/messages.routes.js";
+import applicationRoutes from "./routes/application.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+import bookingRoutes from "./routes/bookings.routes.js";
+import garageRoutes from "./routes/garage.routes.js";
 import errorHandler, { notFound } from "./middleware/error.middleware.js";
 import logger, { httpLogger } from "./utils/logger.js";
 import performanceMonitor from "./middleware/performance.middleware.js";
@@ -26,13 +30,19 @@ import process from "process";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { socketHandler } from "./socket/socketHandler.js";
+import { setIO } from "./utils/socket.js";
 
 dotenv.config();
 
+// =============================
+// Clustering + Memory Controls
+// =============================
 const numCPUs = os.cpus().length;
-const maxWorkers = parseInt(process.env.MAX_WORKERS) || Math.min(numCPUs, 2);
-const enableClustering = process.env.ENABLE_CLUSTERING === "true";
-const memoryLimitWarning = parseInt(process.env.MEMORY_LIMIT_WARNING) || 200;
+const maxWorkers =
+  parseInt(process.env.MAX_WORKERS, 10) || Math.min(numCPUs, 2);
+const enableClustering = process.env.ENABLE_CLUSTERING === "true"; // explicit toggle
+const memoryLimitWarning =
+  parseInt(process.env.MEMORY_LIMIT_WARNING, 10) || 200; // MB
 
 if (
   cluster.isPrimary &&
@@ -42,15 +52,14 @@ if (
   logger.info(`Primary ${process.pid} is running`);
   logger.info(`Setting up ${maxWorkers} workers (CPU cores: ${numCPUs})...`);
 
-  // Memory monitoring for master process
+  // Master process memory monitoring
   const masterMemoryMonitor = setInterval(() => {
     const used = process.memoryUsage();
     const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
-
     if (heapUsedMB > memoryLimitWarning) {
       logger.warn(`Master process high memory usage: ${heapUsedMB}MB`);
     }
-  }, 60000); // Check every minute
+  }, 60_000);
 
   for (let i = 0; i < maxWorkers; i++) {
     cluster.fork();
@@ -63,23 +72,19 @@ if (
     cluster.fork();
   });
 
-  // Graceful shutdown for master process
   process.on("SIGTERM", () => {
     logger.info("Master process received SIGTERM, shutting down workers...");
     clearInterval(masterMemoryMonitor);
-
     for (const id in cluster.workers) {
       cluster.workers[id].kill();
     }
-
-    setTimeout(() => {
-      process.exit(0);
-    }, 5000);
+    setTimeout(() => process.exit(0), 5000);
   });
 } else {
+  // =============================
+  // App Setup
+  // =============================
   const app = express();
-
-  // Trust proxy - important for rate limiting behind reverse proxy (Render, Heroku, etc.)
   app.set("trust proxy", 1);
 
   app.use(helmet());
@@ -88,9 +93,14 @@ if (
   app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   app.use(cookieParser());
 
+  const allowedOrigins = [
+    process.env.CLIENT_URL || "http://localhost:3000",
+    "http://localhost:5173",
+  ];
+
   app.use(
     cors({
-      origin: process.env.CLIENT_URL || "http://localhost:3000",
+      origin: allowedOrigins,
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
@@ -105,19 +115,19 @@ if (
 
   app.use(performanceMonitor);
 
+  // =============================
+  // Rate Limiting
+  // =============================
   const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === "production" ? 50 : 100, // keep stricter in prod
     standardHeaders: true,
     legacyHeaders: false,
     message: "Too many requests from this IP, please try again later.",
-    skipSuccessfulRequests: true, // Don't count successful requests
-    skipFailedRequests: true, // Don't count failed requests
-    // Memory optimization - smaller window for memory store
-    max: process.env.NODE_ENV === "production" ? 50 : 100,
-    // Skip favicon requests to prevent unnecessary rate limiting
+    skipSuccessfulRequests: true,
+    skipFailedRequests: true,
     skip: (req) => req.url === "/favicon.ico",
-    handler: (req, res, next, options) => {
+    handler: (req, res, _next, options) => {
       logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
       res.status(options.statusCode).json({
         status: "error",
@@ -125,11 +135,12 @@ if (
       });
     },
   });
-
   app.use("/api/", apiLimiter);
 
+  // =============================
+  // Database
+  // =============================
   connectDB();
-
   mongoose.set("strictQuery", true);
 
   mongoose.connection.on("disconnected", () => {
@@ -151,6 +162,9 @@ if (
     }
   });
 
+  // =============================
+  // Routes
+  // =============================
   const apiVersion = "/api/v1";
 
   app.use(`${apiVersion}/auth`, authRoutes);
@@ -162,8 +176,12 @@ if (
   app.use(`${apiVersion}/ratings`, ratingRoutes);
   app.use(`${apiVersion}/chats`, chatRoutes);
   app.use(`${apiVersion}/messages`, messagesRoutes);
+  app.use(`${apiVersion}/applications`, applicationRoutes);
+  app.use(`${apiVersion}/notifications`, notificationRoutes);
+  app.use(`${apiVersion}/bookings`, bookingRoutes);
+  app.use(`${apiVersion}/garages`, garageRoutes);
 
-  app.get("/api/", (req, res) => {
+  app.get("/api/", (_req, res) => {
     res.json({
       status: "success",
       message: "Rixdu API is running",
@@ -172,12 +190,10 @@ if (
     });
   });
 
-  // Handle favicon requests to prevent 404 errors
-  app.get("/favicon.ico", (req, res) => {
-    res.status(204).send();
-  });
+  // FavIcon (avoid unnecessary work)
+  app.get("/favicon.ico", (_req, res) => res.status(204).send());
 
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", (_req, res) => {
     const dbStatus =
       mongoose.connection.readyState === 1 ? "connected" : "disconnected";
     res.json({
@@ -192,21 +208,27 @@ if (
   app.use(notFound);
   app.use(errorHandler);
 
+  // =============================
+  // Server + Socket.io
+  // =============================
   const PORT = process.env.PORT || 5000;
-
   const server = createServer(app);
+
   const io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL || "http://localhost:3000",
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
-    maxHttpBufferSize: 1e6, // 1MB buffer limit
-    pingTimeout: 60000,
-    pingInterval: 25000,
+    maxHttpBufferSize: 1e6, // 1MB
+    pingTimeout: 60_000,
+    pingInterval: 25_000,
   });
 
-  // Memory monitoring
+  // Register io globally for access in controllers
+  setIO(io);
+
+  // Memory monitoring (worker)
   const memoryMonitorInterval = setInterval(() => {
     const used = process.memoryUsage();
     const memoryUsageMB = {
@@ -216,13 +238,12 @@ if (
       external: Math.round(used.external / 1024 / 1024),
     };
 
-    // Log warning if heap usage exceeds 200MB
-    if (memoryUsageMB.heapUsed > 200) {
+    if (memoryUsageMB.heapUsed > memoryLimitWarning) {
       logger.warn(
         `High memory usage detected: ${JSON.stringify(memoryUsageMB)}MB`
       );
     }
-  }, 30000); // Check every 30 seconds
+  }, 30_000);
 
   server.listen(PORT, () => {
     logger.info(`Worker ${process.pid} - Server running on port ${PORT}`);
@@ -230,6 +251,9 @@ if (
 
   socketHandler(io);
 
+  // =============================
+  // Process Signals & Errors
+  // =============================
   process.on("SIGTERM", () => {
     logger.info("SIGTERM received, shutting down gracefully");
     clearInterval(memoryMonitorInterval);
@@ -244,8 +268,6 @@ if (
 
   process.on("uncaughtException", (err) => {
     logger.error("Uncaught Exception", err);
-    setTimeout(() => {
-      process.exit(1);
-    }, 1000);
+    setTimeout(() => process.exit(1), 1000);
   });
 }

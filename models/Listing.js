@@ -34,6 +34,11 @@ const listingSchema = new mongoose.Schema(
       type: String,
       unique: true,
     },
+    city: {
+      type: String,
+      required: true,
+      index: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

@@ -12,8 +12,7 @@ const storeSchema = new mongoose.Schema(
     icon: {
       url: {
         type: String,
-        default:
-          "https://res.cloudinary.com/demo/image/upload/v1580125284/default-icon.png",
+        default: null,
       },
       public_id: {
         type: String,

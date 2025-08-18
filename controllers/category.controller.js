@@ -17,6 +17,7 @@ export const createCategory = async (req, res) => {
     } = req.body;
 
     const storeExists = await Store.exists({ _id: storeId });
+
     if (!storeExists) {
       return res.status(404).json({
         success: false,
@@ -94,13 +95,32 @@ export const getCategories = async (req, res) => {
 
     const normalizedParent = parent === "null" || parent === "" ? null : parent;
 
-    if (!storeId && parent !== undefined) {
+    // Handle storeId - it could be an ObjectId or a slug
+    let actualStoreId = null;
+    if (storeId) {
+      if (mongoose.Types.ObjectId.isValid(storeId)) {
+        // It's a valid ObjectId
+        actualStoreId = storeId;
+      } else {
+        // It's not a valid ObjectId, so treat it as a slug
+        const store = await Store.findOne({ slug: storeId });
+        if (!store) {
+          return res.status(404).json({
+            success: false,
+            message: "Store not found",
+          });
+        }
+        actualStoreId = store._id;
+      }
+    }
+
+    if (!actualStoreId && parent !== undefined) {
       filter.parent = normalizedParent;
-    } else if (storeId && parent === undefined) {
-      filter.storeId = storeId;
+    } else if (actualStoreId && parent === undefined) {
+      filter.storeId = actualStoreId;
       filter.parent = null;
-    } else if (storeId && parent !== undefined) {
-      filter.storeId = storeId;
+    } else if (actualStoreId && parent !== undefined) {
+      filter.storeId = actualStoreId;
       filter.parent = normalizedParent;
     }
 
@@ -320,7 +340,13 @@ export const deleteCategory = async (req, res) => {
       await deleteFromCloudinary(category.icon.public_id);
     }
 
-    await category.remove();
+    if (category.parent) {
+      await Category.findByIdAndUpdate(category.parent, {
+        $pull: { children: category._id },
+        $inc: { childrenCount: -1 },
+      });
+    }
+    await category.deleteOne();
 
     res.status(200).json({
       success: true,
@@ -486,7 +512,9 @@ export const getCategoryBySlug = async (req, res) => {
       filter.storeId = storeId;
     }
 
-    const category = await Category.findOne(filter).lean();
+    const category = await Category.findOne(filter)
+      .populate("name slug")
+      .lean();
 
     if (!category) {
       return res.status(404).json({
@@ -519,24 +547,49 @@ export const getCategoryBySlug = async (req, res) => {
 
 export const searchCategories = async (req, res) => {
   try {
-    const { q, storeId, isLeaf, level, page = 1, limit = 20 } = req.query;
+    const {
+      q,
+      storeSlug,
+      isLeaf,
+      level,
+      page = 1,
+      limit = 20,
+      parent,
+    } = req.query;
 
     const skip = (page - 1) * limit;
     const filter = {};
 
-    if (storeId) {
-      filter.storeId = storeId;
+    // Filter by store
+    if (storeSlug) {
+      const store = await Store.findOne({ slug: storeSlug }).select("_id");
+      if (!store) {
+        return res.status(404).json({
+          success: false,
+          message: "Store not found",
+        });
+      }
+      filter.storeId = store._id;
     }
 
+    // Filter by isLeaf
     if (isLeaf !== undefined) {
       filter.isLeaf = isLeaf === "true";
     }
 
+    // Filter by level
     if (level !== undefined) {
       filter.level = parseInt(level);
     }
 
-    // Text search
+    // Filter by parent
+    if (parent === "null" || parent === null || parent === undefined) {
+      filter.parent = null; // Only categories with no parent
+    } else if (parent) {
+      filter.parent = parent; // Categories under specific parent
+    }
+
+    // Search query filter
     if (q) {
       filter.$or = [
         { name: { $regex: q, $options: "i" } },

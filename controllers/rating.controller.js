@@ -1,3 +1,4 @@
+import Profile from "../models/Profile.js";
 import { Rating } from "../models/Rating.js";
 import mongoose from "mongoose";
 
@@ -61,14 +62,54 @@ export const getUserRatings = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const ratings = await Rating.find({ reviewee: userId })
-      .populate("reviewer", "name")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    // Aggregate ratings with reviewer + avatar
+    const ratings = await Rating.aggregate([
+      { $match: { reviewee: new mongoose.Types.ObjectId(userId) } },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
 
+      // Lookup reviewer user info
+      {
+        $lookup: {
+          from: "users",
+          localField: "reviewer",
+          foreignField: "_id",
+          as: "reviewer",
+        },
+      },
+      { $unwind: "$reviewer" },
+
+      // Lookup avatar from Profile
+      {
+        $lookup: {
+          from: "profiles",
+          localField: "reviewer._id",
+          foreignField: "user",
+          as: "profile",
+        },
+      },
+      { $unwind: { path: "$profile", preserveNullAndEmptyArrays: true } },
+
+      // Project the fields you want
+      {
+        $project: {
+          stars: 1,
+          comment: 1,
+          createdAt: 1,
+          reviewer: {
+            _id: "$reviewer._id",
+            name: "$reviewer.name",
+            avatar: "$profile.personal.avatar",
+          },
+        },
+      },
+    ]);
+
+    // Get total count
     const total = await Rating.countDocuments({ reviewee: userId });
 
+    // Average rating
     const avgResult = await Rating.aggregate([
       { $match: { reviewee: new mongoose.Types.ObjectId(userId) } },
       {

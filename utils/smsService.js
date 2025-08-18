@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import process from "process";
 
 const createClient = () => {
   return twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -30,6 +31,10 @@ export const getVerificationSMSTemplate = (verificationCode) => {
 
 export const getPasswordResetSMSTemplate = (resetCode) => {
   return `Your password reset code is: ${resetCode}. This code will expire in 15 minutes. If you did not request this code, please ignore this message.`;
+};
+
+export const getBookingConfirmationSMSTemplate = (bookingDate, time) => {
+  return `Your appointment is placed for ${bookingDate} at ${time}.`;
 };
 
 export const formatPhoneNumber = (phoneNumber) => {
