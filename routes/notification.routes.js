@@ -5,6 +5,7 @@ import {
   markAllAsRead,
   toggleRead,
   deleteNotification,
+  deleteAllNotifications,
   getPreferences,
   upsertPreference,
   registerFCMToken,
@@ -19,6 +20,7 @@ router.use(protect);
 // Notifications
 router.get("/", getNotifications);
 router.patch("/mark-all", markAllAsRead);
+router.delete("/delete-all", deleteAllNotifications);
 router.patch("/:id/toggle", toggleRead);
 router.delete("/:id", deleteNotification);
 

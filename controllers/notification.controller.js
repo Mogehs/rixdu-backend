@@ -11,6 +11,7 @@ import {
   cleanupInvalidTokens,
 } from "../utils/fcmService.js";
 import process from "process";
+import { capitalizeWords } from "./listing.controller.js";
 
 export const buildNotification = ({
   userId,
@@ -31,26 +32,30 @@ export const buildNotification = ({
   channels: {
     inApp: channels?.inApp ?? true,
     email: channels?.email ?? false,
-    push: channels?.push ?? true, // Enable push notifications by default
+    push: channels?.push ?? true,
   },
   metadata,
 });
-
 export const createAndDispatchNotification = async (payload, io) => {
   if (!io) io = getIO();
+  if (payload.channels?.inApp === false) {
+    await handleEmailAndPushOnly(payload);
+    return null;
+  }
   const notif = await Notification.create(payload);
-
   try {
     io?.to?.(`user:${notif.userId}`)?.emit?.("notification:new", notif);
-  } catch {
-    // no-op
+  } catch (e) {
+    console.log("Error sending in-app notifications:", e?.message || e);
   }
-
-  // Email channel
+  await handleEmailAndPushOnly(payload, notif);
+  return notif;
+};
+const handleEmailAndPushOnly = async (payload, notif = null) => {
   if (payload.channels?.email) {
     const to = payload?.metadata?.toEmail;
     if (to) {
-      const appUrl = process.env.CLIENT_URL || "http://localhost:5173";
+      const appUrl = process.env.CLIENT_URL;
       const ctaUrl = payload?.metadata?.slug
         ? `${appUrl}/ad/${payload.metadata.slug}`
         : payload?.listingId
@@ -66,8 +71,6 @@ export const createAndDispatchNotification = async (payload, io) => {
       await sendEmail({ to, ...tpl });
     }
   }
-
-  // Push channel
   if (payload.channels?.push) {
     try {
       const user = await User.findById(payload.userId)
@@ -77,7 +80,6 @@ export const createAndDispatchNotification = async (payload, io) => {
         const tokens = user.fcmTokens
           .filter((t) => t.token)
           .map((t) => t.token);
-
         if (tokens.length > 0) {
           const pushResult = await sendPushNotification({
             tokens,
@@ -86,13 +88,12 @@ export const createAndDispatchNotification = async (payload, io) => {
             imageUrl: payload?.metadata?.image,
             data: {
               type: payload.type || "system",
-              notificationId: notif._id.toString(),
+              notificationId: notif?._id?.toString() || "no-db-record",
               storeId: payload.storeId || "",
               listingId: payload.listingId || "",
               slug: payload?.metadata?.slug || "",
             },
           });
-
           if (pushResult.invalidTokens?.length > 0) {
             await cleanupInvalidTokens(
               payload.userId,
@@ -105,28 +106,23 @@ export const createAndDispatchNotification = async (payload, io) => {
       console.error("Push notification error:", err);
     }
   }
-
-  return notif;
 };
-
 export const getNotifications = async (req, res) => {
   try {
     const { page = 1, limit = 20, unread, storeId } = req.query;
     const query = { userId: req.user.id };
     if (unread === "true") query.isRead = false;
     if (storeId) query.storeId = storeId;
-
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
-
     const [items, total] = await Promise.all([
       Notification.find(query)
+        .populate("listingId", "title slug serviceType _id")
         .sort({ createdAt: -1 })
         .skip((pageNum - 1) * limitNum)
         .limit(limitNum),
       Notification.countDocuments(query),
     ]);
-
     res.json({
       success: true,
       count: items.length,
@@ -138,7 +134,6 @@ export const getNotifications = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 export const markAllAsRead = async (req, res) => {
   try {
     const result = await Notification.updateMany(
@@ -150,7 +145,6 @@ export const markAllAsRead = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 export const toggleRead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -166,7 +160,6 @@ export const toggleRead = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 export const deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
@@ -183,7 +176,20 @@ export const deleteNotification = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
+export const deleteAllNotifications = async (req, res) => {
+  try {
+    const result = await Notification.deleteMany({
+      userId: req.user.id,
+    });
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} notifications deleted`,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
 export const getPreferences = async (req, res) => {
   try {
     const items = await NotificationPreference.find({
@@ -194,7 +200,6 @@ export const getPreferences = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 export const upsertPreference = async (req, res) => {
   try {
     const { storeId, channels } = req.body;
@@ -203,7 +208,6 @@ export const upsertPreference = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "storeId is required" });
-
     const pref = await NotificationPreference.findOneAndUpdate(
       { userId: req.user.id, storeId },
       {
@@ -217,17 +221,15 @@ export const upsertPreference = async (req, res) => {
       },
       { upsert: true, new: true }
     );
-
     res.json({ success: true, data: pref });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 export const resolveChannelsForUserStore = async (
   userId,
   storeId,
-  fallback = { email: false, inApp: true, push: true } // Enable push by default
+  fallback = { email: false, inApp: true, push: true }
 ) => {
   const pref = await NotificationPreference.findOne({ userId, storeId }).lean();
   return {
@@ -236,14 +238,35 @@ export const resolveChannelsForUserStore = async (
     push: pref?.channels?.push ?? fallback.push,
   };
 };
-
+export const createNotificationWithPreferences = async ({
+  userId,
+  title,
+  message,
+  type,
+  storeId,
+  listingId,
+  metadata,
+  io,
+}) => {
+  const channels = await resolveChannelsForUserStore(userId, storeId);
+  const payload = buildNotification({
+    userId,
+    title,
+    message,
+    type,
+    storeId,
+    listingId,
+    channels,
+    metadata,
+  });
+  return await createAndDispatchNotification(payload, io);
+};
 export const notifyStoreSubscribersOnListing = async ({
   storeId,
   listing,
   io,
   extraUsers = [],
 }) => {
-  // Helper to pick an image from listing.values
   const selectPrimaryImageFromListing = (l) => {
     try {
       const v = l?.values;
@@ -299,8 +322,8 @@ export const notifyStoreSubscribersOnListing = async ({
           }
         }
       }
-    } catch {
-      // ignore image extraction errors
+    } catch (e) {
+      console.log("Error selecting primary image:", e?.message || e);
     }
     return null;
   };
@@ -320,9 +343,7 @@ export const notifyStoreSubscribersOnListing = async ({
     if (!userChannels.has(id))
       userChannels.set(id, u.channels || { inApp: true, push: true });
   }
-
   if (userChannels.size === 0) return { created: 0 };
-
   const getListingTitle = (l) => {
     try {
       const v = l?.values;
@@ -367,7 +388,7 @@ export const notifyStoreSubscribersOnListing = async ({
           : null;
       const parts = [];
       if (formatted) parts.push(formatted);
-      if (listing?.city) parts.push(listing.city);
+      if (listing?.city) parts.push(capitalizeWords(listing.city));
       return { metaLine: parts.join(" • ") };
     } catch {
       return { metaLine: "" };
@@ -376,63 +397,63 @@ export const notifyStoreSubscribersOnListing = async ({
   const { metaLine } = buildDetails();
   const title = String(listingTitle);
   const message = metaLine || String(listingTitle);
-
-  const docs = Array.from(userChannels.entries()).map(([uid, channels]) => ({
-    userId: uid,
-    title,
-    message,
-    type: "listing_created",
-    storeId,
-    listingId: listing?._id,
-    channels: {
-      inApp: !!channels?.inApp,
-      email: !!channels?.email,
-      push: !!channels?.push,
-    },
-    metadata: {
-      slug: listing?.slug,
-      image: selectPrimaryImageFromListing(listing) || undefined,
-      metaLine,
-    },
-  }));
-
-  const inserted = await Notification.insertMany(docs, { ordered: false });
-
+  const ownerId = listing?.userId?.toString?.();
+  const docs = Array.from(userChannels.entries())
+    .filter(([uid]) => uid !== ownerId)
+    .map(([uid, channels]) => ({
+      userId: uid,
+      title,
+      message,
+      type: "listing_created",
+      storeId,
+      listingId: listing?._id,
+      channels: {
+        inApp: !!channels?.inApp,
+        email: !!channels?.email,
+        push: !!channels?.push,
+      },
+      metadata: {
+        slug: listing?.slug,
+        image: selectPrimaryImageFromListing(listing) || undefined,
+        metaLine,
+      },
+    }));
+  const inAppDocs = docs.filter((doc) => doc.channels.inApp);
+  const nonInAppDocs = docs.filter((doc) => !doc.channels.inApp);
+  const inserted =
+    inAppDocs.length > 0
+      ? await Notification.insertMany(inAppDocs, { ordered: false })
+      : [];
   try {
     for (const n of inserted) {
-      if (n.channels?.inApp)
-        io?.to?.(`user:${n.userId}`)?.emit?.("notification:new", n);
+      io?.to?.(`user:${n.userId}`)?.emit?.("notification:new", n);
     }
-  } catch {
-    // no-op
+  } catch (e) {
+    console.log("Error sending in-app notifications:", e?.message || e);
   }
-
-  // Email subscribers who enabled email channel
+  for (const doc of nonInAppDocs) {
+    try {
+      await handleEmailAndPushOnly(doc);
+    } catch (err) {
+      console.error(`Failed to send email/push for user ${doc.userId}:`, err);
+    }
+  }
   try {
-    const emailUserIds = inserted
+    const emailUserIds = docs
       .filter((n) => n.channels?.email)
       .map((n) => n.userId?.toString?.())
       .filter(Boolean);
-
-    const ownerId = listing?.userId?.toString?.();
-    const uniqueIds = Array.from(
-      new Set(emailUserIds.filter((id) => id !== ownerId))
-    );
-
-    if (uniqueIds.length > 0) {
-      const users = await User.find({ _id: { $in: uniqueIds } })
+    if (emailUserIds.length > 0) {
+      const users = await User.find({ _id: { $in: emailUserIds } })
         .select("email name")
         .lean();
-
-      const appUrl = process.env.CLIENT_URL || "http://localhost:5173";
+      const appUrl = process.env.CLIENT_URL;
       const ctaUrl = listing?.slug
         ? `${appUrl}/ad/${listing.slug}`
         : listing?._id
         ? `${appUrl}/ad/${listing._id}`
         : undefined;
-
       const image = selectPrimaryImageFromListing(listing) || undefined;
-
       const tasks = [];
       for (const u of users) {
         if (!u?.email) continue;
@@ -447,35 +468,24 @@ export const notifyStoreSubscribersOnListing = async ({
       }
       if (tasks.length) await Promise.allSettled(tasks);
     }
-  } catch {
-    // ignore email burst failures
+  } catch (e) {
+    console.log("Error sending email notifications:", e?.message || e);
   }
-
-  // Push subscribers who enabled push channel
   try {
-    const pushUserIds = inserted
+    const pushUserIds = docs
       .filter((n) => n.channels?.push)
       .map((n) => n.userId?.toString?.())
       .filter(Boolean);
-
-    const ownerId = listing?.userId ? listing.userId.toString() : null;
-
-    const uniquePushIds = Array.from(
-      new Set(pushUserIds.filter((id) => id && id !== ownerId))
-    );
-
-    if (uniquePushIds.length > 0) {
+    if (pushUserIds.length > 0) {
       const usersWithTokens = await User.find({
-        _id: { $in: uniquePushIds },
-        "fcmTokens.token": { $nin: [null, ""] }, // avoid empty or null tokens
+        _id: { $in: pushUserIds },
+        "fcmTokens.token": { $nin: [null, ""] },
       })
         .select("_id fcmTokens")
         .lean();
-
       if (usersWithTokens.length > 0) {
-        const allTokensSet = new Set(); // avoid duplicate tokens
+        const allTokensSet = new Set();
         const userTokenMap = new Map();
-
         for (const user of usersWithTokens) {
           const tokens =
             user.fcmTokens?.filter((t) => t?.token)?.map((t) => t.token) || [];
@@ -484,24 +494,19 @@ export const notifyStoreSubscribersOnListing = async ({
             userTokenMap.set(user._id.toString(), tokens);
           }
         }
-
         const allTokens = Array.from(allTokensSet);
-
         if (allTokens.length > 0) {
           let image;
           try {
             image = selectPrimaryImageFromListing(listing) || undefined;
           } catch {
-            image = undefined; // fallback if selection fails
+            image = undefined;
           }
-
-          // Chunk tokens to avoid FCM rate limit issues
           const chunkSize = 500;
           const chunks = [];
           for (let i = 0; i < allTokens.length; i += chunkSize) {
             chunks.push(allTokens.slice(i, i + chunkSize));
           }
-
           for (const chunk of chunks) {
             try {
               const pushResult = await sendPushNotification({
@@ -516,8 +521,6 @@ export const notifyStoreSubscribersOnListing = async ({
                   slug: listing?.slug || "",
                 },
               });
-
-              // Clean up invalid tokens for each user
               if (pushResult.invalidTokens?.length > 0) {
                 const cleanupTasks = [];
                 for (const [userId, userTokens] of userTokenMap.entries()) {
@@ -549,13 +552,19 @@ export const notifyStoreSubscribersOnListing = async ({
   } catch (err) {
     console.error("Push notification batch error:", err);
   }
-
-  return { created: inserted.length };
+  return {
+    created: inserted.length,
+    totalProcessed: docs.length,
+    inAppNotifications: inserted.length,
+    emailOnlyNotifications: nonInAppDocs.filter((d) => d.channels.email).length,
+    pushOnlyNotifications: nonInAppDocs.filter(
+      (d) => d.channels.push && !d.channels.email
+    ).length,
+  };
 };
 export const registerFCMToken = async (req, res) => {
   try {
     const { token, deviceId, userAgent } = req.body;
-
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -564,7 +573,23 @@ export const registerFCMToken = async (req, res) => {
     }
 
     const userId = req.user.id;
+    const User = (await import("../models/User.js")).default;
 
+    // Check if token already exists to prevent duplicates
+    const existingUser = await User.findById(userId);
+    const existingToken = existingUser?.fcmTokens?.find(
+      (t) => t.token === token
+    );
+
+    if (existingToken) {
+      return res.json({
+        success: true,
+        message: "FCM token already registered",
+        alreadyExists: true,
+      });
+    }
+
+    // Remove any existing tokens for this device to prevent duplicates
     await User.findByIdAndUpdate(userId, {
       $pull: {
         fcmTokens: {
@@ -597,29 +622,24 @@ export const registerFCMToken = async (req, res) => {
     });
   }
 };
-
 export const unregisterFCMToken = async (req, res) => {
   try {
     const { token, deviceId } = req.body;
-
     if (!token && !deviceId) {
       return res.status(400).json({
         success: false,
         message: "Either token or deviceId is required",
       });
     }
-
     const userId = req.user.id;
     const query = {};
     if (token) query.token = token;
     if (deviceId) query.deviceId = deviceId;
-
     const result = await User.findByIdAndUpdate(
       userId,
       { $pull: { fcmTokens: query } },
       { new: true }
     );
-
     res.json({
       success: true,
       message: "FCM token unregistered successfully",
@@ -633,38 +653,37 @@ export const unregisterFCMToken = async (req, res) => {
     });
   }
 };
-
 export const createTestNotification = async (req, res) => {
   try {
-    const { title, message } = req.body;
+    const { title, message, storeId } = req.body;
     const userId = req.user.id;
-
-    // Create a test notification
-    const notification = await createAndDispatchNotification({
+    const notification = await createNotificationWithPreferences({
       userId,
       title: title || "Test Notification",
       message: message || "This is a test notification from Rixdu!",
       type: "system",
-      channels: {
-        inApp: true,
-        push: true,
-        email: false,
-      },
+      storeId: storeId || null,
       metadata: {
         isTest: true,
         createdAt: new Date(),
       },
     });
-
     res.json({
       success: true,
       message: "Test notification created and sent successfully",
-      notification: {
-        id: notification._id,
-        title: notification.title,
-        message: notification.message,
-        channels: notification.channels,
-      },
+      notification: notification
+        ? {
+            id: notification._id,
+            title: notification.title,
+            message: notification.message,
+            channels: notification.channels,
+          }
+        : {
+            message:
+              "Notification not created - user has in-app notifications disabled",
+            channelsProcessed:
+              "email and/or push notifications may have been sent",
+          },
     });
   } catch (err) {
     console.error("Test notification error:", err);

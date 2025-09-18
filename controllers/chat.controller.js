@@ -3,7 +3,7 @@ import Chat from "../models/Chat.js";
 import Message from "../models/Message.js";
 
 export const getOrCreateChat = async (req, res) => {
-  const { listingId, senderId, receiverId } = req.body;
+  const { listingId, senderId, receiverId, type } = req.body;
 
   try {
     let chat = await Chat.findOne({
@@ -30,6 +30,7 @@ export const getOrCreateChat = async (req, res) => {
         listing: listingId,
         sender: senderId,
         receiver: receiverId,
+        type: type || "other",
       });
 
       await chat.save();
@@ -73,10 +74,10 @@ export const getChatById = async (req, res) => {
       .populate("receiver")
       .populate({
         path: "listing",
-        select: "values slug storeId",
+        select: "values slug storeId categoryId",
         populate: {
           path: "storeId",
-          select: "name slug icon",
+          select: "name slug",
         },
       });
 

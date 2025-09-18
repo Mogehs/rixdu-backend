@@ -12,6 +12,7 @@ export const createBooking = async (req, res) => {
     const patientId = req.user.id;
     const {
       doctorId,
+      listing,
       date,
       time,
       consultationType,
@@ -30,12 +31,13 @@ export const createBooking = async (req, res) => {
       !time ||
       !patientName ||
       !phone ||
-      !email
+      !email ||
+      !listing
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Doctor ID, Patient ID, Date, Time, Patient Name, Phone, and Email are required.",
+          "Doctor ID, Patient ID, Date, Time, Patient Name, Phone, Email, and Listing are required.",
       });
     }
 
@@ -82,6 +84,7 @@ export const createBooking = async (req, res) => {
     const booking = new Bookings({
       doctor: doctorId,
       patient: patientId,
+      listing: listing,
       date: bookingDate,
       time: time,
       consultationType: consultationType || "clinic",
@@ -140,6 +143,7 @@ export const createBooking = async (req, res) => {
 export const getBookingsByDoctor = async (req, res) => {
   try {
     const { doctorId } = req.params;
+    console.log(doctorId);
 
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       return res.status(400).json({
@@ -150,6 +154,7 @@ export const getBookingsByDoctor = async (req, res) => {
 
     const bookings = await Bookings.find({ doctor: doctorId })
       .populate("patient")
+      .populate("doctor", "name email")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({

@@ -1,10 +1,10 @@
-import cloudinary from '../config/cloudinary.js';
-import { Readable } from 'stream';
+import cloudinary from "../config/cloudinary.js";
+import { Readable } from "stream";
 
 export const uploadToCloudinary = (
   file,
-  folder = 'stores',
-  resourceType = 'image'
+  folder = "stores",
+  resourceType = "image"
 ) => {
   return new Promise((resolve, reject) => {
     if (!file || !file.buffer) {
@@ -14,8 +14,8 @@ export const uploadToCloudinary = (
     const uploadOptions = {
       folder: `rixdu/${folder}`,
       resource_type: resourceType,
-      quality: 'auto',
-      fetch_format: 'auto',
+      quality: "100", // Maximum quality (no compression)
+      flags: "preserve_transparency", // Preserve transparency for PNG files
     };
 
     // Preserve original filename when possible
@@ -24,18 +24,15 @@ export const uploadToCloudinary = (
       uploadOptions.unique_filename = true;
     }
 
-    if (resourceType === 'image') {
-      uploadOptions.transformation = [
-        { width: 512, height: 512, crop: 'limit' },
-      ];
-    }
+    // Remove all transformations to preserve original dimensions and quality
+    // No transformations applied - images will be uploaded in their original size and quality
 
     const stream = cloudinary.uploader.upload_stream(
       uploadOptions,
       (error, result) => {
         if (error) {
-          console.error('Cloudinary stream upload error:', error);
-          return reject(new Error('Upload failed'));
+          console.error("Cloudinary stream upload error:", error);
+          return reject(new Error("Upload failed"));
         }
 
         // Create response with additional metadata
@@ -64,13 +61,13 @@ export const deleteFromCloudinary = async (publicId) => {
     await cloudinary.uploader.destroy(publicId);
     return true;
   } catch (error) {
-    console.error('Cloudinary delete error:', error);
+    console.error("Cloudinary delete error:", error);
     return false;
   }
 };
 
 export const uploadUserAvatar = (file) => {
-  return uploadToCloudinary(file, 'profiles/avatars', 'image');
+  return uploadToCloudinary(file, "profiles/avatars", "image");
 };
 
 export const uploadUserResume = (file) => {
@@ -82,10 +79,10 @@ export const uploadUserResume = (file) => {
 
     const uploadOptions = {
       folder: `rixdu/profiles/resumes`,
-      resource_type: 'raw',
+      resource_type: "raw",
       use_filename: true, // Try to use the original filename
       filename_override: file.originalname, // Force the original filename
-      public_id: file.originalname.split('.')[0], // Use name without extension as public_id
+      public_id: file.originalname.split(".")[0], // Use name without extension as public_id
       unique_filename: true, // Make sure it's unique
     };
 
@@ -93,13 +90,13 @@ export const uploadUserResume = (file) => {
       uploadOptions,
       (error, result) => {
         if (error) {
-          console.error('Cloudinary resume upload error:', error);
-          return reject(new Error('Resume upload failed'));
+          console.error("Cloudinary resume upload error:", error);
+          return reject(new Error("Resume upload failed"));
         }
 
         // Add original filename as URL parameter so frontend can access it
         const url = new URL(result.secure_url);
-        url.searchParams.set('original_filename', file.originalname);
+        url.searchParams.set("original_filename", file.originalname);
 
         resolve({
           public_id: result.public_id,
@@ -115,7 +112,7 @@ export const uploadUserResume = (file) => {
 
 export const deleteResourceFromCloudinary = async (
   publicId,
-  resourceType = 'image'
+  resourceType = "image"
 ) => {
   if (!publicId) return true;
 

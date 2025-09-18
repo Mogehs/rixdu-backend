@@ -4,12 +4,16 @@ import mongoose from "mongoose";
 
 export const createRating = async (req, res) => {
   try {
-    const { reviewer, reviewee, stars, message, attributes } = req.body;
+    const { reviewer, reviewee, stars, message, attributes, listingId } =
+      req.body;
 
-    if (!reviewer || !reviewee || !stars || !message) {
+    console.log(req.body);
+
+    if (!reviewer || !reviewee || !stars || !message || !listingId) {
       return res.status(400).json({
         success: false,
-        message: "Reviewer, reviewee, stars, and message are required",
+        message:
+          "Reviewer, reviewee, stars, message, and listingId are required",
       });
     }
 
@@ -20,21 +24,35 @@ export const createRating = async (req, res) => {
       });
     }
 
-    const existingRating = await Rating.findOne({ reviewer, reviewee });
+    // Check if already rated this user for the same listing
+    const existingRating = await Rating.findOne({
+      reviewer,
+      reviewee,
+      listing: listingId,
+    });
     if (existingRating) {
       return res.status(409).json({
         success: false,
-        message: "You have already rated this user",
+        message: "You have already rated this user for this listing",
       });
     }
 
+    // Create rating
     const rating = await Rating.create({
       reviewer,
       reviewee,
       stars,
       message,
+      listing: listingId,
       attributes: attributes || [],
     });
+
+    // Push rating into reviewee's profile
+    const revieweeProfile = await Profile.findOne({ user: reviewee });
+    if (revieweeProfile) {
+      revieweeProfile.public.ratings.push(rating._id);
+      await revieweeProfile.save();
+    }
 
     await rating.populate([
       { path: "reviewer", select: "name" },
@@ -47,6 +65,7 @@ export const createRating = async (req, res) => {
       data: rating,
     });
   } catch (error) {
+    console.log(error);
     return res.status(500).json({
       success: false,
       message: "Error creating rating",
@@ -55,21 +74,32 @@ export const createRating = async (req, res) => {
   }
 };
 
-export const getUserRatings = async (req, res) => {
+export const getListingRatings = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId, listingId } = req.params;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Aggregate ratings with reviewer + avatar
+    if (!listingId) {
+      return res.status(400).json({
+        success: false,
+        message: "Listing ID is required to fetch ratings.",
+      });
+    }
+
+    // ✅ Only ratings for this user + this listing
+    const matchStage = {
+      reviewee: new mongoose.Types.ObjectId(userId),
+      listing: new mongoose.Types.ObjectId(listingId),
+    };
+
     const ratings = await Rating.aggregate([
-      { $match: { reviewee: new mongoose.Types.ObjectId(userId) } },
+      { $match: matchStage },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
 
-      // Lookup reviewer user info
       {
         $lookup: {
           from: "users",
@@ -80,38 +110,26 @@ export const getUserRatings = async (req, res) => {
       },
       { $unwind: "$reviewer" },
 
-      // Lookup avatar from Profile
-      {
-        $lookup: {
-          from: "profiles",
-          localField: "reviewer._id",
-          foreignField: "user",
-          as: "profile",
-        },
-      },
-      { $unwind: { path: "$profile", preserveNullAndEmptyArrays: true } },
-
-      // Project the fields you want
       {
         $project: {
           stars: 1,
-          comment: 1,
+          message: 1,
           createdAt: 1,
           reviewer: {
             _id: "$reviewer._id",
             name: "$reviewer.name",
-            avatar: "$profile.personal.avatar",
+            avatar: "$reviewer.avatar", // Get avatar directly from User model
           },
         },
       },
     ]);
 
-    // Get total count
-    const total = await Rating.countDocuments({ reviewee: userId });
+    // Count only for this listing
+    const total = await Rating.countDocuments(matchStage);
 
-    // Average rating
+    // Average rating only for this listing
     const avgResult = await Rating.aggregate([
-      { $match: { reviewee: new mongoose.Types.ObjectId(userId) } },
+      { $match: matchStage },
       {
         $group: {
           _id: null,

@@ -316,14 +316,6 @@ export const updatePersonalProfile = async (req, res) => {
       );
     }
 
-    // Double check that it's set properly
-    console.log("Updated profile visa status to:", {
-      value: profile.personal.visaStatus,
-      type: typeof profile.personal.visaStatus,
-      keys: Object.keys(profile.personal),
-      hasVisaStatusKey: Object.keys(profile.personal).includes("visaStatus"),
-    });
-
     if (location) {
       profile.personal.location = {
         ...(profile.personal.location || {}),
@@ -332,6 +324,16 @@ export const updatePersonalProfile = async (req, res) => {
     }
 
     await profile.save();
+
+    // Sync avatar to User model if it was updated
+    if (req.file && profile.personal.avatar) {
+      const User = mongoose.model("User");
+      await User.findByIdAndUpdate(userId, {
+        avatar: profile.personal.avatar,
+        avatar_public_id: profile.personal.avatar_public_id,
+      });
+      console.log(`Avatar synced to User model for user: ${userId}`);
+    }
 
     console.log("Profile personal data to be returned:", {
       hasVisaStatus: !!profile.personal.visaStatus,
@@ -642,6 +644,7 @@ export const removeFromFavorites = async (req, res) => {
 export const getUserFavorites = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
+    console.log("Fetching favorites for user:", userId);
 
     // Validate that userId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
@@ -718,15 +721,49 @@ export const createProfile = async (userId) => {
 
     const profile = await Profile.create({
       user: userId,
-
       personal: {},
       jobProfile: {},
       favorites: { listings: [] },
     });
 
+    console.log(`Profile created for user: ${userId}`);
     return profile;
   } catch (error) {
     console.error(`Error creating profile: ${error.message}`);
     throw new Error("Failed to create profile");
+  }
+};
+
+// Utility function to sync all existing profiles' avatars to users
+export const syncAllAvatarsToUsers = async () => {
+  try {
+    const User = mongoose.model("User");
+    const profiles = await Profile.find({
+      "personal.avatar": {
+        $exists: true,
+        $nin: [null, "", "default-avatar.jpg"],
+      },
+    }).select("user personal.avatar personal.avatar_public_id");
+
+    console.log(`Found ${profiles.length} profiles with avatars to sync`);
+
+    for (const profile of profiles) {
+      if (
+        profile.personal.avatar &&
+        profile.personal.avatar !== "default-avatar.jpg"
+      ) {
+        await User.findByIdAndUpdate(profile.user, {
+          avatar: profile.personal.avatar,
+          avatar_public_id: profile.personal.avatar_public_id,
+        });
+        console.log(`Synced avatar for user: ${profile.user}`);
+      }
+    }
+
+    console.log("Avatar sync completed successfully");
+    return { success: true, synced: profiles.length };
+  } catch (error) {
+    console.error(`Error syncing avatars: ${error.message}`);
+    throw new Error("Failed to sync avatars");
   }
 };

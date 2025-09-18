@@ -180,7 +180,7 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
     .populate("user", "name")
     .populate({
       path: "public.ads",
-      select: "values images categoryId createdAt updatedAt slug",
+      select: "values images categoryId createdAt updatedAt slug serviceType",
       populate: {
         path: "categoryId",
         select: "name",
@@ -202,7 +202,14 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
         select: "name",
       },
     })
-    .populate("public.ratings")
+    .populate({
+      path: "public.ratings",
+      populate: [
+        { path: "reviewer", select: "name email" },
+        { path: "reviewee", select: "name email" },
+      ],
+    })
+
     .select(
       "public personal.avatar personal.bio personal.location personal.dateOfBirth personal.languages personal.visaStatus"
     )

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import process from "process";
 
 const UserSchema = new mongoose.Schema(
   {
@@ -59,6 +60,7 @@ const UserSchema = new mongoose.Schema(
     resetPasswordToken: String,
     resetPasswordExpire: Date,
     auth0Id: String,
+    stripeCustomerId: String,
     provider: {
       type: String,
       enum: ["email", "google-oauth2", "apple", "auth0", "local"],
@@ -72,6 +74,13 @@ const UserSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+    avatar: {
+      type: String,
+      default: "default-avatar.jpg",
+    },
+    avatar_public_id: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -154,7 +163,7 @@ UserSchema.methods.generatePasswordResetToken = function () {
 UserSchema.statics.findByIdLean = function (id) {
   return this.findById(id)
     .select(
-      "name email role phoneNumber location isVerified verificationMethod"
+      "name email role phoneNumber location isVerified verificationMethod avatar"
     )
     .lean();
 };

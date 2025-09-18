@@ -32,6 +32,11 @@ const chatSchema = new mongoose.Schema(
     lastMessageAt: {
       type: Date,
     },
+    type: {
+      type: String,
+      enum: ["seeker", "hiring", "vehicle", "other"],
+      default: "other",
+    },
   },
   {
     timestamps: true,

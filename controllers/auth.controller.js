@@ -1,19 +1,19 @@
-import User from '../models/User.js';
-import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
-import axios from 'axios';
+import User from "../models/User.js";
+import crypto from "crypto";
+import axios from "axios";
+import process from "process";
 import {
   sendEmail,
   getVerificationEmailTemplate,
   getPasswordResetEmailTemplate,
-} from '../utils/emailService.js';
+} from "../utils/emailService.js";
 import {
   sendSMS,
   getVerificationSMSTemplate,
   getPasswordResetSMSTemplate,
   formatPhoneNumber,
-} from '../utils/smsService.js';
-import { createProfile } from '../controllers/profile.controller.js';
+} from "../utils/smsService.js";
+import { AuthJobService } from "../services/authJobService.js";
 
 const sendTokenResponse = (user, statusCode, res) => {
   const token = user.password
@@ -28,8 +28,8 @@ const sendTokenResponse = (user, statusCode, res) => {
       Date.now() + (process.env.JWT_COOKIE_EXPIRE || 30) * 24 * 60 * 60 * 1000
     ),
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'Strict',
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "Strict",
   };
 
   if (user.password) {
@@ -37,7 +37,7 @@ const sendTokenResponse = (user, statusCode, res) => {
   }
   return res
     .status(statusCode)
-    .cookie('token', token, options)
+    .cookie("token", token, options)
     .json({
       success: true,
       token,
@@ -60,52 +60,52 @@ export const sendVerificationCode = async (req, res) => {
     if (!email && !phoneNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an email address or phone number',
+        message: "Please provide an email address or phone number",
       });
     }
 
     if (phoneNumber) {
       phoneNumber = formatPhoneNumber(phoneNumber);
-      const digitsOnly = phoneNumber.replace(/\D/g, '');
+      const digitsOnly = phoneNumber.replace(/\D/g, "");
       if (digitsOnly.length < 10 || digitsOnly.length > 15) {
         return res.status(400).json({
           success: false,
-          message: 'Please provide a valid phone number',
+          message: "Please provide a valid phone number",
         });
       }
     }
 
-    const verificationMethod = phoneNumber ? 'phone' : 'email';
+    const verificationMethod = phoneNumber ? "phone" : "email";
 
     let user;
 
     if (email) {
       user = await User.findOne({ email })
-        .select('isVerified verificationMethod phoneNumber')
+        .select("isVerified verificationMethod phoneNumber")
         .lean();
 
       if (user && user.isVerified) {
         return res.status(400).json({
           success: false,
-          message: 'User with this email already exists',
+          message: "User with this email already exists",
         });
       }
     } else if (phoneNumber) {
       user = await User.findOne({ phoneNumber })
-        .select('isVerified verificationMethod email')
+        .select("isVerified verificationMethod email")
         .lean();
 
       if (user && user.isVerified) {
         return res.status(400).json({
           success: false,
-          message: 'User with this phone number already exists',
+          message: "User with this phone number already exists",
         });
       }
     }
     if (!user) {
       const userData = {
-        name: name || (email ? email.split('@')[0] : `user_${Date.now()}`),
-        password: crypto.randomBytes(20).toString('hex'),
+        name: name || (email ? email.split("@")[0] : `user_${Date.now()}`),
+        password: crypto.randomBytes(20).toString("hex"),
       };
       if (email) userData.email = email;
       if (phoneNumber) userData.phoneNumber = phoneNumber;
@@ -118,45 +118,70 @@ export const sendVerificationCode = async (req, res) => {
 
     await user.save({ validateBeforeSave: false });
 
-    if (verificationMethod === 'phone') {
-      const smsText = getVerificationSMSTemplate(verificationCode);
-      await sendSMS({
-        to: user.phoneNumber,
-        body: smsText,
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: 'Verification code sent to phone',
-        data: {
-          phoneNumber: user.phoneNumber,
-        },
-      });
-    } else {
-      const emailTemplate = getVerificationEmailTemplate(
+    try {
+      // Queue the job for sending verification code
+      await AuthJobService.sendVerificationCode(
+        verificationMethod,
+        verificationMethod === "phone" ? user.phoneNumber : user.email,
         user.name,
         verificationCode
       );
-      await sendEmail({
-        to: user.email,
-        subject: emailTemplate.subject,
-        text: emailTemplate.text,
-        html: emailTemplate.html,
-      });
 
       return res.status(200).json({
         success: true,
-        message: 'Verification code sent to email',
+        message: `Verification code sent to ${verificationMethod}`,
         data: {
-          email: user.email,
+          [verificationMethod === "phone" ? "phoneNumber" : "email"]:
+            verificationMethod === "phone" ? user.phoneNumber : user.email,
         },
       });
+    } catch (jobError) {
+      console.error(
+        `Error queueing verification ${verificationMethod} job:`,
+        jobError.message
+      );
+
+      // Fallback to direct sending if job queue fails
+      if (verificationMethod === "phone") {
+        const smsText = getVerificationSMSTemplate(verificationCode);
+        await sendSMS({
+          to: user.phoneNumber,
+          body: smsText,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "Verification code sent to phone",
+          data: {
+            phoneNumber: user.phoneNumber,
+          },
+        });
+      } else {
+        const emailTemplate = getVerificationEmailTemplate(
+          user.name,
+          verificationCode
+        );
+        await sendEmail({
+          to: user.email,
+          subject: emailTemplate.subject,
+          text: emailTemplate.text,
+          html: emailTemplate.html,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "Verification code sent to email",
+          data: {
+            email: user.email,
+          },
+        });
+      }
     }
   } catch (error) {
     console.error(`Verification code error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error sending verification code. Please try again.',
+      message: "Server error sending verification code. Please try again.",
     });
   }
 };
@@ -169,7 +194,7 @@ export const register = async (req, res) => {
     if (!verificationCode || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide password and verification code',
+        message: "Please provide password and verification code",
       });
     }
 
@@ -178,7 +203,7 @@ export const register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          'Please provide either email or phone number through which you received the verification code',
+          "Please provide either email or phone number through which you received the verification code",
       });
     }
 
@@ -187,15 +212,15 @@ export const register = async (req, res) => {
     }
 
     const hashedToken = crypto
-      .createHash('sha256')
+      .createHash("sha256")
       .update(verificationCode)
-      .digest('hex');
+      .digest("hex");
 
-    const verificationMethod = phoneNumber ? 'phone' : 'email';
+    const verificationMethod = phoneNumber ? "phone" : "email";
 
     const user = await User.findOne({
-      [verificationMethod === 'phone' ? 'phoneNumber' : 'email']:
-        verificationMethod === 'phone' ? phoneNumber : email,
+      [verificationMethod === "phone" ? "phoneNumber" : "email"]:
+        verificationMethod === "phone" ? phoneNumber : email,
       verificationToken: hashedToken,
       verificationExpire: { $gt: Date.now() },
       verificationMethod: verificationMethod,
@@ -204,7 +229,7 @@ export const register = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid method or expired verification code',
+        message: "Invalid method or expired verification code",
       });
     }
 
@@ -216,11 +241,16 @@ export const register = async (req, res) => {
 
     await user.save();
 
+    // Queue profile creation job (non-blocking)
     try {
-      await createProfile(user._id);
-      console.log(`Profile created successfully for user ${user._id}`);
-    } catch (profileError) {
-      console.error(`Error creating profile: ${profileError.message}`);
+      await AuthJobService.createUserProfile(user._id);
+      console.log(`Profile creation job queued for user ${user._id}`);
+    } catch (profileJobError) {
+      console.error(
+        `Error queueing profile creation job: ${profileJobError.message}`
+      );
+      // Continue with registration even if profile job queueing fails
+      // The profile can be created later or manually
     }
 
     return sendTokenResponse(user, 201, res);
@@ -228,7 +258,7 @@ export const register = async (req, res) => {
     console.error(`Registration error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error during registration. Please try again.',
+      message: "Server error during registration. Please try again.",
     });
   }
 };
@@ -240,7 +270,7 @@ export const login = async (req, res) => {
     if ((!email && !phoneNumber) || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an email or phone number along with password',
+        message: "Please provide an email or phone number along with password",
       });
     }
 
@@ -254,21 +284,21 @@ export const login = async (req, res) => {
 
     const user = await User.findOne(query)
       .select(
-        '+password name email role phoneNumber isVerified verificationMethod'
+        "+password name email role phoneNumber isVerified verificationMethod"
       )
       .lean();
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials',
+        message: "Invalid credentials",
       });
     }
 
     if (!user.isVerified) {
       return res.status(401).json({
         success: false,
-        message: 'Please verify your account before logging in',
+        message: "Please verify your account before logging in",
         needsVerification: true,
         email: user.email,
         phoneNumber: user.phoneNumber,
@@ -284,7 +314,7 @@ export const login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials',
+        message: "Invalid credentials",
       });
     }
 
@@ -293,7 +323,7 @@ export const login = async (req, res) => {
     console.error(`Login error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error during login. Please try again.',
+      message: "Server error during login. Please try again.",
     });
   }
 };
@@ -305,7 +335,7 @@ export const getMe = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
@@ -317,21 +347,21 @@ export const getMe = async (req, res) => {
     console.error(`Get user profile error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error retrieving user profile',
+      message: "Server error retrieving user profile",
     });
   }
 };
 
 export const logout = (req, res) => {
-  res.cookie('token', 'none', {
+  res.cookie("token", "none", {
     expires: new Date(Date.now() + 10 * 1000),
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === "production",
   });
 
   return res.status(200).json({
     success: true,
-    message: 'User logged out successfully',
+    message: "User logged out successfully",
     data: {},
   });
 };
@@ -343,7 +373,7 @@ export const forgotPassword = async (req, res) => {
     if (!email && !phoneNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an email address or phone number',
+        message: "Please provide an email address or phone number",
       });
     }
 
@@ -351,11 +381,11 @@ export const forgotPassword = async (req, res) => {
       phoneNumber = formatPhoneNumber(phoneNumber);
     }
 
-    const verificationMethod = phoneNumber ? 'phone' : 'email';
+    const verificationMethod = phoneNumber ? "phone" : "email";
 
     let user;
 
-    if (verificationMethod === 'phone') {
+    if (verificationMethod === "phone") {
       user = await User.findOne({ phoneNumber, isVerified: true });
     } else {
       user = await User.findOne({ email, isVerified: true });
@@ -365,39 +395,63 @@ export const forgotPassword = async (req, res) => {
       return res.status(404).json({
         success: false,
         message:
-          verificationMethod === 'phone'
-            ? 'No verified user found with that phone number'
-            : 'No verified user found with that email address',
+          verificationMethod === "phone"
+            ? "No verified user found with that phone number"
+            : "No verified user found with that email address",
       });
     }
 
     const resetCode = User.schema.methods.generatePasswordResetToken.call(user);
     await user.save({ validateBeforeSave: false });
 
-    if (verificationMethod === 'phone') {
-      const smsText = getPasswordResetSMSTemplate(resetCode);
-      await sendSMS({
-        to: user.phoneNumber,
-        body: smsText,
-      });
+    try {
+      // Queue the job for sending password reset code
+      await AuthJobService.sendPasswordResetCode(
+        verificationMethod,
+        verificationMethod === "phone" ? user.phoneNumber : user.email,
+        user.name,
+        resetCode
+      );
 
       return res.status(200).json({
         success: true,
-        message: 'Password reset code sent to phone',
+        message: `Password reset code sent to ${verificationMethod}`,
       });
-    } else {
-      const emailTemplate = getPasswordResetEmailTemplate(user.name, resetCode);
-      await sendEmail({
-        to: user.email,
-        subject: emailTemplate.subject,
-        text: emailTemplate.text,
-        html: emailTemplate.html,
-      });
+    } catch (jobError) {
+      console.error(
+        `Error queueing password reset ${verificationMethod} job:`,
+        jobError.message
+      );
 
-      return res.status(200).json({
-        success: true,
-        message: 'Password reset code sent to email',
-      });
+      // Fallback to direct sending if job queue fails
+      if (verificationMethod === "phone") {
+        const smsText = getPasswordResetSMSTemplate(resetCode);
+        await sendSMS({
+          to: user.phoneNumber,
+          body: smsText,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "Password reset code sent to phone",
+        });
+      } else {
+        const emailTemplate = getPasswordResetEmailTemplate(
+          user.name,
+          resetCode
+        );
+        await sendEmail({
+          to: user.email,
+          subject: emailTemplate.subject,
+          text: emailTemplate.text,
+          html: emailTemplate.html,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "Password reset code sent to email",
+        });
+      }
     }
   } catch (error) {
     console.error(`Forgot password error: ${error.message}`);
@@ -410,7 +464,7 @@ export const forgotPassword = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Server error sending reset code. Please try again.',
+      message: "Server error sending reset code. Please try again.",
     });
   }
 };
@@ -422,14 +476,14 @@ export const resetPassword = async (req, res) => {
     if (!resetCode || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide reset code and new password',
+        message: "Please provide reset code and new password",
       });
     }
 
     if (!email && !phoneNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide either email or phone number',
+        message: "Please provide either email or phone number",
       });
     }
 
@@ -438,14 +492,14 @@ export const resetPassword = async (req, res) => {
     }
 
     const hashedToken = crypto
-      .createHash('sha256')
+      .createHash("sha256")
       .update(resetCode)
-      .digest('hex');
+      .digest("hex");
 
-    const verificationMethod = phoneNumber ? 'phone' : 'email';
+    const verificationMethod = phoneNumber ? "phone" : "email";
     const contactField =
-      verificationMethod === 'phone' ? 'phoneNumber' : 'email';
-    const contactValue = verificationMethod === 'phone' ? phoneNumber : email;
+      verificationMethod === "phone" ? "phoneNumber" : "email";
+    const contactValue = verificationMethod === "phone" ? phoneNumber : email;
 
     const user = await User.findOne({
       [contactField]: contactValue,
@@ -456,7 +510,7 @@ export const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired reset code',
+        message: "Invalid or expired reset code",
       });
     }
 
@@ -467,13 +521,13 @@ export const resetPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Password reset successful',
+      message: "Password reset successful",
     });
   } catch (error) {
     console.error(`Reset password error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error resetting password. Please try again.',
+      message: "Server error resetting password. Please try again.",
     });
   }
 };
@@ -485,7 +539,7 @@ export const resendVerificationCode = async (req, res) => {
     if (!email && !phoneNumber) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide an email address or phone number',
+        message: "Please provide an email address or phone number",
       });
     }
 
@@ -493,10 +547,10 @@ export const resendVerificationCode = async (req, res) => {
       phoneNumber = formatPhoneNumber(phoneNumber);
     }
 
-    const verificationMethod = phoneNumber ? 'phone' : 'email';
+    const verificationMethod = phoneNumber ? "phone" : "email";
     const contactField =
-      verificationMethod === 'phone' ? 'phoneNumber' : 'email';
-    const contactValue = verificationMethod === 'phone' ? phoneNumber : email;
+      verificationMethod === "phone" ? "phoneNumber" : "email";
+    const contactValue = verificationMethod === "phone" ? phoneNumber : email;
 
     const user = await User.findOne({
       [contactField]: contactValue,
@@ -507,48 +561,69 @@ export const resendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          verificationMethod === 'phone'
-            ? 'No unverified user found with that phone number'
-            : 'No unverified user found with that email',
+          verificationMethod === "phone"
+            ? "No unverified user found with that phone number"
+            : "No unverified user found with that email",
       });
     }
 
     const verificationCode = user.generateVerificationToken(verificationMethod);
     await user.save({ validateBeforeSave: false });
 
-    if (verificationMethod === 'phone') {
-      const smsText = getVerificationSMSTemplate(verificationCode);
-      await sendSMS({
-        to: user.phoneNumber,
-        body: smsText,
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: 'Verification code resent to phone',
-      });
-    } else {
-      const emailTemplate = getVerificationEmailTemplate(
+    try {
+      // Queue the job for resending verification code
+      await AuthJobService.sendVerificationCode(
+        verificationMethod,
+        verificationMethod === "phone" ? user.phoneNumber : user.email,
         user.name,
         verificationCode
       );
-      await sendEmail({
-        to: user.email,
-        subject: emailTemplate.subject,
-        text: emailTemplate.text,
-        html: emailTemplate.html,
-      });
 
       return res.status(200).json({
         success: true,
-        message: 'Verification code resent to email',
+        message: `Verification code resent to ${verificationMethod}`,
       });
+    } catch (jobError) {
+      console.error(
+        `Error queueing resend verification ${verificationMethod} job:`,
+        jobError.message
+      );
+
+      // Fallback to direct sending if job queue fails
+      if (verificationMethod === "phone") {
+        const smsText = getVerificationSMSTemplate(verificationCode);
+        await sendSMS({
+          to: user.phoneNumber,
+          body: smsText,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "Verification code resent to phone",
+        });
+      } else {
+        const emailTemplate = getVerificationEmailTemplate(
+          user.name,
+          verificationCode
+        );
+        await sendEmail({
+          to: user.email,
+          subject: emailTemplate.subject,
+          text: emailTemplate.text,
+          html: emailTemplate.html,
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: "Verification code resent to email",
+        });
+      }
     }
   } catch (error) {
     console.error(`Resend verification error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error sending verification code. Please try again.',
+      message: "Server error sending verification code. Please try again.",
     });
   }
 };
@@ -560,16 +635,16 @@ export const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide current password and new password',
+        message: "Please provide current password and new password",
       });
     }
 
-    const user = await User.findById(req.user.id).select('+password');
+    const user = await User.findById(req.user.id).select("+password");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
@@ -581,7 +656,7 @@ export const changePassword = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Current password is incorrect',
+        message: "Current password is incorrect",
       });
     }
 
@@ -590,13 +665,13 @@ export const changePassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Password updated successfully',
+      message: "Password updated successfully",
     });
   } catch (error) {
     console.error(`Change password error: ${error.message}`);
     return res.status(500).json({
       success: false,
-      message: 'Server error updating password. Please try again.',
+      message: "Server error updating password. Please try again.",
     });
   }
 };
@@ -604,24 +679,24 @@ export const changePassword = async (req, res) => {
 export const auth0Login = async (req, res) => {
   const { accessToken } = req.body;
 
-  console.log('Auth0 Login - Full request body:', req.body);
-  console.log('Auth0 Login - Request received:', {
+  console.log("Auth0 Login - Full request body:", req.body);
+  console.log("Auth0 Login - Request received:", {
     hasAccessToken: !!accessToken,
     tokenLength: accessToken?.length,
-    tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...` : 'none',
+    tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...` : "none",
   });
 
   try {
     if (!accessToken) {
-      console.error('Auth0 Login - No access token provided');
+      console.error("Auth0 Login - No access token provided");
       return res.status(400).json({
         success: false,
-        message: 'Access token is required',
+        message: "Access token is required",
       });
     }
 
     // First, try to get user info from Auth0 using the access token
-    console.log('Auth0 Login - Getting user info from Auth0...');
+    console.log("Auth0 Login - Getting user info from Auth0...");
     const userInfoResponse = await axios.get(
       `https://${process.env.AUTH0_DOMAIN}/userinfo`,
       {
@@ -629,73 +704,72 @@ export const auth0Login = async (req, res) => {
       }
     );
 
-    console.log('Auth0 Login - User info received:', {
+    console.log("Auth0 Login - User info received:", {
       email: userInfoResponse.data.email,
       name: userInfoResponse.data.name,
       sub: userInfoResponse.data.sub,
     });
 
-    const { email, name, picture, nickname, sub } = userInfoResponse.data;
+    const { email, name, sub } = userInfoResponse.data;
 
     if (!sub) {
-      console.error('Auth0 Login - No sub claim in user info');
+      console.error("Auth0 Login - No sub claim in user info");
       return res.status(400).json({
         success: false,
-        message: 'Invalid user information from Auth0',
+        message: "Invalid user information from Auth0",
       });
     }
 
-    const provider = sub.split('|')[0];
-    let username =
-      nickname || name || sub.split('|')[1] || `user_${Date.now()}`;
+    const provider = sub.split("|")[0];
 
     // Find or create user
-    console.log('Auth0 Login - Looking for existing user with auth0Id:', sub);
+    console.log("Auth0 Login - Looking for existing user with auth0Id:", sub);
     let user = await User.findOne({ auth0Id: sub });
 
     if (!user && email) {
-      console.log('Auth0 Login - Looking for existing user with email:', email);
+      console.log("Auth0 Login - Looking for existing user with email:", email);
       user = await User.findOne({ email: email });
 
       if (user) {
-        console.log('Auth0 Login - Linking existing user account');
+        console.log("Auth0 Login - Linking existing user account");
         user.auth0Id = sub;
         user.provider = provider;
         user.isVerified = true;
-        user.verificationMethod = 'auth0';
+        user.verificationMethod = "auth0";
 
         await user.save();
       }
     }
 
     if (!user) {
-      console.log('Auth0 Login - Creating new user');
+      console.log("Auth0 Login - Creating new user");
       user = new User({
         auth0Id: sub,
         email,
         name,
         provider,
         isVerified: true,
-        verificationMethod: 'auth0',
-        role: 'user',
+        verificationMethod: "auth0",
+        role: "user",
       });
       await user.save();
 
+      // Queue profile creation job (non-blocking)
       try {
-        await createProfile(user._id);
-        console.log(`Profile created successfully for Auth0 user ${user._id}`);
-      } catch (profileError) {
+        await AuthJobService.createUserProfile(user._id);
+        console.log(`Profile creation job queued for Auth0 user ${user._id}`);
+      } catch (profileJobError) {
         console.error(
-          `Error creating profile for Auth0 user: ${profileError.message}`
+          `Error queueing profile creation job for Auth0 user: ${profileJobError.message}`
         );
-        // Continue with login even if profile creation fails
+        // Continue with login even if profile job queueing fails
       }
     }
 
-    console.log('Auth0 Login - Sending token response');
+    console.log("Auth0 Login - Sending token response");
     return sendTokenResponse(user, 200, res);
   } catch (error) {
-    console.error('Auth0 Login Error:', {
+    console.error("Auth0 Login Error:", {
       message: error.message,
       stack: error.stack,
       response: error.response?.data,
@@ -704,8 +778,8 @@ export const auth0Login = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Authentication failed. Please try again.',
-      ...(process.env.NODE_ENV === 'development' && {
+      message: "Authentication failed. Please try again.",
+      ...(process.env.NODE_ENV === "development" && {
         error: error.message,
         details: error.response?.data,
       }),
