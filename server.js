@@ -23,8 +23,6 @@ import applicationRoutes from "./routes/application.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import bookingRoutes from "./routes/bookings.routes.js";
 import garageRoutes from "./routes/garage.routes.js";
-import pricePlanRoutes from "./routes/pricePlan.routes.js";
-import paymentRoutes from "./routes/payment.routes.js";
 import errorHandler, { notFound } from "./middleware/error.middleware.js";
 import logger, { httpLogger } from "./utils/logger.js";
 import performanceMonitor from "./middleware/performance.middleware.js";
@@ -36,13 +34,34 @@ import { setIO } from "./utils/socket.js";
 
 dotenv.config();
 
+// =============================
+// Clustering + Memory Controls
+// =============================
 const numCPUs = os.cpus().length;
+const maxWorkers =
+  parseInt(process.env.MAX_WORKERS, 10) || Math.min(numCPUs, 2);
+const enableClustering = process.env.ENABLE_CLUSTERING === "true"; // explicit toggle
+const memoryLimitWarning =
+  parseInt(process.env.MEMORY_LIMIT_WARNING, 10) || 200; // MB
 
-if (cluster.isPrimary && process.env.NODE_ENV === "production") {
+if (
+  cluster.isPrimary &&
+  process.env.NODE_ENV === "production" &&
+  enableClustering
+) {
   logger.info(`Primary ${process.pid} is running`);
-  logger.info(`Setting up ${numCPUs} workers...`);
+  logger.info(`Setting up ${maxWorkers} workers (CPU cores: ${numCPUs})...`);
 
-  for (let i = 0; i < numCPUs; i++) {
+  // Master process memory monitoring
+  const masterMemoryMonitor = setInterval(() => {
+    const used = process.memoryUsage();
+    const heapUsedMB = Math.round(used.heapUsed / 1024 / 1024);
+    if (heapUsedMB > memoryLimitWarning) {
+      logger.warn(`Master process high memory usage: ${heapUsedMB}MB`);
+    }
+  }, 60_000);
+
+  for (let i = 0; i < maxWorkers; i++) {
     cluster.fork();
   }
 
@@ -52,8 +71,21 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
     );
     cluster.fork();
   });
+
+  process.on("SIGTERM", () => {
+    logger.info("Master process received SIGTERM, shutting down workers...");
+    clearInterval(masterMemoryMonitor);
+    for (const id in cluster.workers) {
+      cluster.workers[id].kill();
+    }
+    setTimeout(() => process.exit(0), 5000);
+  });
 } else {
+  // =============================
+  // App Setup
+  // =============================
   const app = express();
+  app.set("trust proxy", 1);
 
   app.use(helmet());
   app.use(compression());
@@ -61,9 +93,14 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
   app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   app.use(cookieParser());
 
+  const allowedOrigins = [
+    process.env.CLIENT_URL || "http://localhost:3000",
+    "http://localhost:5173",
+  ];
+
   app.use(
     cors({
-      origin: process.env.CLIENT_URL || "http://localhost:3000",
+      origin: allowedOrigins,
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
@@ -78,13 +115,19 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
 
   app.use(performanceMonitor);
 
+  // =============================
+  // Rate Limiting
+  // =============================
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: process.env.NODE_ENV === "production" ? 50 : 100, // keep stricter in prod
     standardHeaders: true,
     legacyHeaders: false,
     message: "Too many requests from this IP, please try again later.",
-    handler: (req, res, next, options) => {
+    skipSuccessfulRequests: true,
+    skipFailedRequests: true,
+    skip: (req) => req.url === "/favicon.ico",
+    handler: (req, res, _next, options) => {
       logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
       res.status(options.statusCode).json({
         status: "error",
@@ -92,16 +135,20 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
       });
     },
   });
-
   app.use("/api/", apiLimiter);
 
+  // =============================
+  // Database
+  // =============================
   connectDB();
-
   mongoose.set("strictQuery", true);
 
   mongoose.connection.on("disconnected", () => {
     logger.warn("MongoDB disconnected. Attempting to reconnect...");
-    setTimeout(connectDB, 5000);
+    // Prevent multiple reconnection attempts
+    if (mongoose.connection.readyState === 0) {
+      setTimeout(connectDB, 5000);
+    }
   });
 
   process.on("SIGINT", async () => {
@@ -115,6 +162,9 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
     }
   });
 
+  // =============================
+  // Routes
+  // =============================
   const apiVersion = "/api/v1";
 
   app.use(`${apiVersion}/auth`, authRoutes);
@@ -130,10 +180,8 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
   app.use(`${apiVersion}/notifications`, notificationRoutes);
   app.use(`${apiVersion}/bookings`, bookingRoutes);
   app.use(`${apiVersion}/garages`, garageRoutes);
-  app.use(`${apiVersion}/price-plans`, pricePlanRoutes);
-  app.use(`${apiVersion}/payments`, paymentRoutes);
 
-  app.get("/api/", (req, res) => {
+  app.get("/api/", (_req, res) => {
     res.json({
       status: "success",
       message: "Rixdu API is running",
@@ -142,7 +190,10 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
     });
   });
 
-  app.get("/api/health", (req, res) => {
+  // FavIcon (avoid unnecessary work)
+  app.get("/favicon.ico", (_req, res) => res.status(204).send());
+
+  app.get("/api/health", (_req, res) => {
     const dbStatus =
       mongoose.connection.readyState === 1 ? "connected" : "disconnected";
     res.json({
@@ -157,22 +208,42 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
   app.use(notFound);
   app.use(errorHandler);
 
+  // =============================
+  // Server + Socket.io
+  // =============================
   const PORT = process.env.PORT || 5000;
-
   const server = createServer(app);
-  const allowedOrigins = [
-    process.env.CLIENT_URL || "http://localhost:3000",
-    "http://localhost:5173",
-  ];
+
   const io = new Server(server, {
     cors: {
       origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
+    maxHttpBufferSize: 1e6, // 1MB
+    pingTimeout: 60_000,
+    pingInterval: 25_000,
   });
 
+  // Register io globally for access in controllers
   setIO(io);
+
+  // Memory monitoring (worker)
+  const memoryMonitorInterval = setInterval(() => {
+    const used = process.memoryUsage();
+    const memoryUsageMB = {
+      rss: Math.round(used.rss / 1024 / 1024),
+      heapTotal: Math.round(used.heapTotal / 1024 / 1024),
+      heapUsed: Math.round(used.heapUsed / 1024 / 1024),
+      external: Math.round(used.external / 1024 / 1024),
+    };
+
+    if (memoryUsageMB.heapUsed > memoryLimitWarning) {
+      logger.warn(
+        `High memory usage detected: ${JSON.stringify(memoryUsageMB)}MB`
+      );
+    }
+  }, 30_000);
 
   server.listen(PORT, () => {
     logger.info(`Worker ${process.pid} - Server running on port ${PORT}`);
@@ -180,8 +251,12 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
 
   socketHandler(io);
 
+  // =============================
+  // Process Signals & Errors
+  // =============================
   process.on("SIGTERM", () => {
     logger.info("SIGTERM received, shutting down gracefully");
+    clearInterval(memoryMonitorInterval);
     server.close(() => {
       logger.info("Process terminated");
     });
@@ -193,8 +268,6 @@ if (cluster.isPrimary && process.env.NODE_ENV === "production") {
 
   process.on("uncaughtException", (err) => {
     logger.error("Uncaught Exception", err);
-    setTimeout(() => {
-      process.exit(1);
-    }, 1000);
+    setTimeout(() => process.exit(1), 1000);
   });
 }
