@@ -97,6 +97,7 @@ if (
     process.env.CLIENT_URL || "http://localhost:3000",
     "http://localhost:5173",
     "https://www.rixdu.com",
+    "https://rixdu.com",
   ];
 
   app.use(
