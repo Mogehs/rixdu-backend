@@ -1,10 +1,33 @@
 import mongoose from "mongoose";
 import Store from "../models/Store.js";
 import Category from "../models/Category.js";
+import redis from "../config/redis.js";
+import crypto from "crypto";
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
 } from "../utils/cloudinaryUpload.js";
+
+const invalidateStoreCache = async (storeId = null, storeSlug = null) => {
+  try {
+    const keysToDelete = ["stores:all", "stores:with_categories_tree"];
+
+    for (let i = 0; i <= 10; i++) {
+      keysToDelete.push(`stores:with_categories_level_${i}`);
+    }
+
+    if (storeId) {
+      keysToDelete.push(`store:${storeId}`);
+    }
+    if (storeSlug) {
+      keysToDelete.push(`store:${storeSlug}`);
+    }
+
+    await redis.del(...keysToDelete);
+  } catch (error) {
+    console.warn("Cache invalidation error:", error.message);
+  }
+};
 
 export const createStore = async (req, res) => {
   try {
@@ -28,6 +51,8 @@ export const createStore = async (req, res) => {
       icon: iconData ? iconData : undefined,
     });
 
+    await invalidateStoreCache();
+
     return res.status(201).json({
       success: true,
       data: store,
@@ -44,9 +69,50 @@ export const createStore = async (req, res) => {
 export const getStores = async (req, res) => {
   try {
     const { level, root } = req.query;
+
+    let cacheKey = "stores:all";
+    let isRootRequest = root === "true";
+    let levelNum = level !== undefined ? parseInt(level) : null;
+
+    if (isRootRequest) {
+      cacheKey = "stores:with_categories_tree";
+    } else if (levelNum !== null) {
+      if (isNaN(levelNum) || levelNum < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Level must be a non-negative number",
+        });
+      }
+      cacheKey = `stores:with_categories_level_${levelNum}`;
+    }
+
+    let responseData;
+    let dataHash;
+
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        dataHash = crypto.createHash("md5").update(cachedData).digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
+    }
+
     const stores = await Store.findAllStores();
 
-    if (root === "true") {
+    if (isRootRequest) {
       const storesWithCategories = await Promise.all(
         stores.map(async (store) => {
           const categories = await Category.find({
@@ -56,12 +122,10 @@ export const getStores = async (req, res) => {
             .sort({ level: 1, name: 1 })
             .lean();
 
-          // Build tree structure
           const buildTree = (categories) => {
             const categoryMap = new Map();
             const roots = [];
 
-            // Create a map of all categories
             categories.forEach((category) => {
               categoryMap.set(category._id.toString(), {
                 ...category,
@@ -69,7 +133,6 @@ export const getStores = async (req, res) => {
               });
             });
 
-            // Build the tree structure
             categories.forEach((category) => {
               const categoryWithChildren = categoryMap.get(
                 category._id.toString()
@@ -81,7 +144,6 @@ export const getStores = async (req, res) => {
                   parent.children.push(categoryWithChildren);
                 }
               } else {
-                // Root level category
                 roots.push(categoryWithChildren);
               }
             });
@@ -100,26 +162,13 @@ export const getStores = async (req, res) => {
         })
       );
 
-      return res.status(200).json({
+      responseData = {
         success: true,
         count: storesWithCategories.length,
         data: storesWithCategories,
         isRootRequest: true,
-      });
-    }
-
-    // If level parameter is provided, fetch categories by level for all stores
-    if (level !== undefined) {
-      const levelNum = parseInt(level);
-
-      if (isNaN(levelNum) || levelNum < 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Level must be a non-negative number",
-        });
-      }
-
-      // Fetch categories for all stores from level 0 to the specified level
+      };
+    } else if (levelNum !== null) {
       const storesWithCategories = await Promise.all(
         stores.map(async (store) => {
           const categories = await Category.find({
@@ -139,19 +188,33 @@ export const getStores = async (req, res) => {
         })
       );
 
-      return res.status(200).json({
+      responseData = {
         success: true,
         count: storesWithCategories.length,
         data: storesWithCategories,
         categoryLevel: levelNum,
-      });
+      };
+    } else {
+      responseData = {
+        success: true,
+        count: stores.length,
+        data: stores,
+      };
     }
 
-    return res.status(200).json({
-      success: true,
-      count: stores.length,
-      data: stores,
-    });
+    const responseString = JSON.stringify(responseData);
+    dataHash = crypto.createHash("md5").update(responseString).digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 900, responseString);
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error(`Error fetching stores: ${error.message}`);
     return res.status(500).json({
@@ -164,6 +227,32 @@ export const getStores = async (req, res) => {
 export const getStore = async (req, res) => {
   try {
     const { idOrSlug } = req.params;
+    const cacheKey = `store:${idOrSlug}`;
+
+    let responseData;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        const dataHash = crypto
+          .createHash("md5")
+          .update(cachedData)
+          .digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
+    }
 
     let store;
     if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
@@ -179,10 +268,27 @@ export const getStore = async (req, res) => {
       });
     }
 
-    return res.status(200).json({
+    responseData = {
       success: true,
       data: store,
-    });
+    };
+
+    const responseString = JSON.stringify(responseData);
+    const dataHash = crypto
+      .createHash("md5")
+      .update(responseString)
+      .digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 1800, responseString);
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error(`Error fetching store: ${error.message}`);
     return res.status(500).json({
@@ -205,6 +311,8 @@ export const updateStore = async (req, res) => {
         message: "Store not found",
       });
     }
+
+    const oldSlug = store.slug;
 
     if (name && name !== store.name) {
       const nameExists = await Store.findOne({
@@ -239,6 +347,11 @@ export const updateStore = async (req, res) => {
 
     await store.save();
 
+    await invalidateStoreCache(store._id, oldSlug);
+    if (store.slug !== oldSlug) {
+      await invalidateStoreCache(store._id, store.slug);
+    }
+
     return res.status(200).json({
       success: true,
       data: store,
@@ -257,7 +370,6 @@ export const deleteStore = async (req, res) => {
   try {
     const { idOrSlug } = req.params;
 
-    // Find the store by ID or slug
     let store;
     if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
       store = await Store.findById(idOrSlug);
@@ -272,7 +384,6 @@ export const deleteStore = async (req, res) => {
       });
     }
 
-    // Check if store has categories
     const categoriesCount = await Category.countDocuments({
       storeId: store._id,
     });
@@ -284,12 +395,16 @@ export const deleteStore = async (req, res) => {
       });
     }
 
-    // Delete image from Cloudinary if exists
     if (store.icon && store.icon.public_id) {
       await deleteFromCloudinary(store.icon.public_id);
     }
 
+    const storeId = store._id;
+    const storeSlug = store.slug;
+
     await store.deleteOne();
+
+    await invalidateStoreCache(storeId, storeSlug);
 
     return res.status(200).json({
       success: true,

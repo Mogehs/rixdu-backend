@@ -1,10 +1,43 @@
 import mongoose from "mongoose";
 import Category from "../models/Category.js";
 import Store from "../models/Store.js";
+import redis from "../config/redis.js";
+import crypto from "crypto";
 import {
   uploadToCloudinary,
   deleteFromCloudinary,
 } from "../utils/cloudinaryUpload.js";
+
+const invalidateCategoryCache = async (storeId = null, categoryId = null) => {
+  try {
+    const keysToDelete = [];
+
+    // Generic category cache patterns
+    keysToDelete.push("categories:*");
+    keysToDelete.push("category:*");
+    keysToDelete.push("category_tree:*");
+    keysToDelete.push("category_search:*");
+
+    if (storeId) {
+      keysToDelete.push(`categories:store:${storeId}:*`);
+      keysToDelete.push(`category_tree:${storeId}`);
+    }
+
+    if (categoryId) {
+      keysToDelete.push(`category:${categoryId}`);
+    }
+
+    // Get all matching keys and delete them
+    for (const pattern of keysToDelete) {
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+    }
+  } catch (error) {
+    console.warn("Category cache invalidation error:", error.message);
+  }
+};
 
 export const createCategory = async (req, res) => {
   try {
@@ -73,6 +106,8 @@ export const createCategory = async (req, res) => {
       $inc: { "stats.categoryCount": 1 },
     });
 
+    await invalidateCategoryCache(storeId);
+
     res.status(201).json({
       success: true,
       data: newCategory,
@@ -91,18 +126,44 @@ export const getCategories = async (req, res) => {
     const { storeId, parent, page = 1, limit = 50 } = req.query;
     const skip = (page - 1) * limit;
 
-    const filter = {};
+    // Generate cache key based on query parameters
+    const cacheKey = `categories:store:${storeId || "all"}:parent:${
+      parent || "null"
+    }:page:${page}:limit:${limit}`;
 
+    let responseData;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        const dataHash = crypto
+          .createHash("md5")
+          .update(cachedData)
+          .digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
+    }
+
+    const filter = {};
     const normalizedParent = parent === "null" || parent === "" ? null : parent;
 
-    // Handle storeId - it could be an ObjectId or a slug
     let actualStoreId = null;
     if (storeId) {
       if (mongoose.Types.ObjectId.isValid(storeId)) {
-        // It's a valid ObjectId
         actualStoreId = storeId;
       } else {
-        // It's not a valid ObjectId, so treat it as a slug
         const store = await Store.findOne({ slug: storeId });
         if (!store) {
           return res.status(404).json({
@@ -145,7 +206,7 @@ export const getCategories = async (req, res) => {
 
     const total = await Category.countDocuments(filter);
 
-    res.status(200).json({
+    responseData = {
       success: true,
       count: categories.length,
       total,
@@ -155,7 +216,24 @@ export const getCategories = async (req, res) => {
         limit: parseInt(limit),
       },
       data: categories,
-    });
+    };
+
+    const responseString = JSON.stringify(responseData);
+    const dataHash = crypto
+      .createHash("md5")
+      .update(responseString)
+      .digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 600, responseString); // 10 minutes cache
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    res.status(200).json(responseData);
   } catch (error) {
     console.error("Fetch error:", error);
     res.status(500).json({
@@ -170,17 +248,42 @@ export const getCategory = async (req, res) => {
     const { identifier } = req.params;
     const { storeId } = req.query;
 
+    const cacheKey = `category:${identifier}:store:${storeId || "any"}`;
+
+    let responseData;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        const dataHash = crypto
+          .createHash("md5")
+          .update(cachedData)
+          .digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
+    }
+
     let category;
     let filter = {};
 
-    // Check if identifier is a valid ObjectId or treat as slug
     if (mongoose.Types.ObjectId.isValid(identifier)) {
       filter._id = identifier;
     } else {
       filter.slug = identifier;
     }
 
-    // Add storeId to filter if provided
     if (storeId) {
       filter.storeId = storeId;
     }
@@ -194,7 +297,6 @@ export const getCategory = async (req, res) => {
       });
     }
 
-    // Get children if category has any
     if (category.children && category.children.length > 0) {
       const children = await Category.findChildren(
         category._id,
@@ -203,10 +305,27 @@ export const getCategory = async (req, res) => {
       category.childrenData = children;
     }
 
-    res.status(200).json({
+    responseData = {
       success: true,
       data: category,
-    });
+    };
+
+    const responseString = JSON.stringify(responseData);
+    const dataHash = crypto
+      .createHash("md5")
+      .update(responseString)
+      .digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 1200, responseString); // 20 minutes cache
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    res.status(200).json(responseData);
   } catch (error) {
     console.error("getCategory error:", error);
     res.status(500).json({
@@ -222,7 +341,6 @@ export const updateCategory = async (req, res) => {
     const { name, isLeaf, fields } = req.body;
 
     let category;
-    // Check if identifier is a valid ObjectId or treat as slug
     if (mongoose.Types.ObjectId.isValid(identifier)) {
       category = await Category.findById(identifier);
     } else {
@@ -297,6 +415,8 @@ export const updateCategory = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    await invalidateCategoryCache(category.storeId, category._id);
+
     res.status(200).json({
       success: true,
       data: updatedCategory,
@@ -348,6 +468,8 @@ export const deleteCategory = async (req, res) => {
     }
     await category.deleteOne();
 
+    await invalidateCategoryCache(category.storeId, category._id);
+
     res.status(200).json({
       success: true,
       message: "Category deleted successfully",
@@ -369,6 +491,33 @@ export const getCategoryTree = async (req, res) => {
         success: false,
         message: "Invalid store ID format",
       });
+    }
+
+    const cacheKey = `category_tree:${storeId}`;
+
+    let responseData;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        const dataHash = crypto
+          .createHash("md5")
+          .update(cachedData)
+          .digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
     }
 
     const categories = await Category.getFullHierarchy(storeId);
@@ -398,10 +547,27 @@ export const getCategoryTree = async (req, res) => {
 
     const tree = buildTree();
 
-    res.status(200).json({
+    responseData = {
       success: true,
       data: tree,
-    });
+    };
+
+    const responseString = JSON.stringify(responseData);
+    const dataHash = crypto
+      .createHash("md5")
+      .update(responseString)
+      .digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 1800, responseString); // 30 minutes cache
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    res.status(200).json(responseData);
   } catch (error) {
     console.error("getCategoryTree error:", error);
     res.status(500).json({
@@ -558,9 +724,41 @@ export const searchCategories = async (req, res) => {
     } = req.query;
 
     const skip = (page - 1) * limit;
+
+    // Generate cache key based on all query parameters
+    const cacheKey = `category_search:q:${q || "none"}:store:${
+      storeSlug || "all"
+    }:leaf:${isLeaf || "any"}:level:${level || "any"}:parent:${
+      parent || "any"
+    }:page:${page}:limit:${limit}`;
+
+    let responseData;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        const dataHash = crypto
+          .createHash("md5")
+          .update(cachedData)
+          .digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
+    }
+
     const filter = {};
 
-    // Filter by store
     if (storeSlug) {
       const store = await Store.findOne({ slug: storeSlug }).select("_id");
       if (!store) {
@@ -572,24 +770,20 @@ export const searchCategories = async (req, res) => {
       filter.storeId = store._id;
     }
 
-    // Filter by isLeaf
     if (isLeaf !== undefined) {
       filter.isLeaf = isLeaf === "true";
     }
 
-    // Filter by level
     if (level !== undefined) {
       filter.level = parseInt(level);
     }
 
-    // Filter by parent
     if (parent === "null" || parent === null || parent === undefined) {
-      filter.parent = null; // Only categories with no parent
+      filter.parent = null;
     } else if (parent) {
-      filter.parent = parent; // Categories under specific parent
+      filter.parent = parent;
     }
 
-    // Search query filter
     if (q) {
       filter.$or = [
         { name: { $regex: q, $options: "i" } },
@@ -606,7 +800,7 @@ export const searchCategories = async (req, res) => {
 
     const total = await Category.countDocuments(filter);
 
-    res.status(200).json({
+    responseData = {
       success: true,
       count: categories.length,
       total,
@@ -616,7 +810,24 @@ export const searchCategories = async (req, res) => {
         limit: parseInt(limit),
       },
       data: categories,
-    });
+    };
+
+    const responseString = JSON.stringify(responseData);
+    const dataHash = crypto
+      .createHash("md5")
+      .update(responseString)
+      .digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 300, responseString); // 5 minutes cache for search results
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    res.status(200).json(responseData);
   } catch (error) {
     console.error("searchCategories error:", error);
     res.status(500).json({

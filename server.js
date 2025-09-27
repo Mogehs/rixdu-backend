@@ -23,6 +23,8 @@ import applicationRoutes from "./routes/application.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import bookingRoutes from "./routes/bookings.routes.js";
 import garageRoutes from "./routes/garage.routes.js";
+import pricePlanRoutes from "./routes/pricePlan.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
 import errorHandler, { notFound } from "./middleware/error.middleware.js";
 import logger, { httpLogger } from "./utils/logger.js";
 import performanceMonitor from "./middleware/performance.middleware.js";
@@ -93,16 +95,27 @@ if (
   app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   app.use(cookieParser());
 
-  const allowedOrigins = [
-    process.env.CLIENT_URL || "http://localhost:3000",
-    "http://localhost:5173",
-    "https://www.rixdu.com",
-    "https://rixdu.com",
-  ];
+  // Parse multiple client URLs from environment variable
+  const getAllowedOrigins = () => {
+    const clientUrls = process.env.CLIENT_URL || "http://localhost:3000";
+    return clientUrls.split(",").map((url) => url.trim());
+  };
 
   app.use(
     cors({
-      origin: allowedOrigins,
+      origin: (origin, callback) => {
+        const allowedOrigins = getAllowedOrigins();
+
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          console.warn(`CORS blocked origin: ${origin}`);
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       credentials: true,
       methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
@@ -182,6 +195,8 @@ if (
   app.use(`${apiVersion}/notifications`, notificationRoutes);
   app.use(`${apiVersion}/bookings`, bookingRoutes);
   app.use(`${apiVersion}/garages`, garageRoutes);
+  app.use(`${apiVersion}/price-plans`, pricePlanRoutes);
+  app.use(`${apiVersion}/payments`, paymentRoutes);
 
   app.get("/api/", (_req, res) => {
     res.json({
@@ -216,9 +231,22 @@ if (
   const PORT = process.env.PORT || 5000;
   const server = createServer(app);
 
+  // Use the same allowed origins function for Socket.IO
+  const allowedOrigins = getAllowedOrigins();
+
   const io = new Server(server, {
     cors: {
-      origin: allowedOrigins,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+          callback(null, true);
+        } else {
+          console.warn(`Socket.IO CORS blocked origin: ${origin}`);
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
       methods: ["GET", "POST"],
       credentials: true,
     },
