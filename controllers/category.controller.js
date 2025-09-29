@@ -896,3 +896,150 @@ export const getCategoryChildren = async (req, res) => {
     });
   }
 };
+
+// Helper function to find all leaf categories that are descendants of a parent category
+const findAllLeafChildren = async (parentId, storeId) => {
+  const allDescendants = [];
+
+  // Recursive function to get all descendants
+  const getDescendants = async (categoryId) => {
+    const children = await Category.find({ parent: categoryId, storeId });
+
+    for (const child of children) {
+      allDescendants.push(child);
+      // Recursively get children of this child
+      await getDescendants(child._id);
+    }
+  };
+
+  await getDescendants(parentId);
+
+  // Filter only leaf categories
+  return allDescendants.filter((category) => category.isLeaf);
+};
+
+// Helper function to find all leaf categories in a store
+const findAllLeafCategoriesInStore = async (storeId) => {
+  return await Category.find({
+    storeId: storeId,
+    isLeaf: true,
+  });
+};
+
+// API to update fields for all leaf children of a parent category OR all leaf categories in a store
+export const updateFieldsForAllLeafChildren = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const { fields } = req.body;
+
+    // Validate categoryId
+    if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ID format",
+      });
+    }
+
+    // Validate fields
+    if (!fields || !Array.isArray(fields)) {
+      return res.status(400).json({
+        success: false,
+        message: "Fields must be provided as an array",
+      });
+    }
+
+    // First, try to find as a category
+    let parentCategory = await Category.findById(categoryId);
+    let store = null;
+    let leafChildren = [];
+    let entityType = "";
+    let entityName = "";
+    let storeId = null;
+
+    if (parentCategory) {
+      // It's a category ID
+      entityType = "category";
+      entityName = parentCategory.name;
+      storeId = parentCategory.storeId;
+
+      // Find all leaf children of this category
+      leafChildren = await findAllLeafChildren(
+        categoryId,
+        parentCategory.storeId
+      );
+    } else {
+      // Try to find as a store
+      store = await Store.findById(categoryId);
+
+      if (!store) {
+        return res.status(404).json({
+          success: false,
+          message: "Neither category nor store found with the provided ID",
+        });
+      }
+
+      // It's a store ID
+      entityType = "store";
+      entityName = store.name;
+      storeId = store._id;
+
+      // Find all leaf categories in this store
+      leafChildren = await findAllLeafCategoriesInStore(store._id);
+    }
+
+    if (leafChildren.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: `No leaf categories found in this ${entityType}`,
+        updatedCount: 0,
+        updatedCategories: [],
+        entityType,
+        entityName,
+      });
+    }
+
+    // Update fields for all leaf children
+    const updatePromises = leafChildren.map(async (leafCategory) => {
+      leafCategory.fields = fields;
+      await leafCategory.save();
+      return {
+        _id: leafCategory._id,
+        name: leafCategory.name,
+        slug: leafCategory.slug,
+      };
+    });
+
+    const updatedCategories = await Promise.all(updatePromises);
+
+    // Invalidate cache for affected categories
+    await invalidateCategoryCache(storeId);
+
+    res.status(200).json({
+      success: true,
+      message: `Successfully updated fields for ${updatedCategories.length} leaf categories in ${entityType} "${entityName}"`,
+      updatedCount: updatedCategories.length,
+      updatedCategories,
+      entityType,
+      entityName,
+      parentInfo:
+        entityType === "category"
+          ? {
+              _id: parentCategory._id,
+              name: parentCategory.name,
+              slug: parentCategory.slug,
+            }
+          : {
+              _id: store._id,
+              name: store.name,
+              slug: store.slug,
+            },
+    });
+  } catch (error) {
+    console.error("updateFieldsForAllLeafChildren error:", error);
+    res.status(500).json({
+      success: false,
+      message:
+        "Server error updating fields for leaf categories. Please try again.",
+    });
+  }
+};

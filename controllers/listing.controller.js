@@ -101,6 +101,27 @@ const formatNumber = (n) => {
   }
   return n;
 };
+
+// Generate a unique slug that can never be a MongoDB ObjectId
+const generateUniqueSlug = (title = null) => {
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).substring(2, 8);
+
+  if (title) {
+    const baseSlug = String(title)
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .substring(0, 30); // Limit length
+
+    // Format: [base-slug]_timestamp_random - can never be a MongoDB ObjectId
+    return `[${baseSlug}]_${timestamp}_${randomStr}`;
+  } else {
+    // Format: [listing]_timestamp_random - can never be a MongoDB ObjectId
+    return `[listing]_${timestamp}_${randomStr}`;
+  }
+};
 export const capitalizeWords = (str = "") =>
   str
     .split(" ")
@@ -305,6 +326,11 @@ export const createListing = async (req, res) => {
             /health/i.test(store.slug) ||
             /care/i.test(store.slug))))
     );
+    // Generate a unique slug that can never be a MongoDB ObjectId
+    const titleValue =
+      transformedValues.get("title") || transformedValues.get("name");
+    const slug = generateUniqueSlug(titleValue);
+
     const listing = await Listing.create({
       storeId,
       categoryId,
@@ -312,6 +338,7 @@ export const createListing = async (req, res) => {
       values: transformedValues,
       userId: req.user.id,
       city,
+      slug,
       serviceType: isVehicleStore
         ? "vehicles"
         : isHealthCareStore
@@ -516,6 +543,7 @@ export const getListings = async (req, res) => {
 export const getListing = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(id);
     let query = {};
     if (mongoose.Types.ObjectId.isValid(id)) {
       query._id = id;
@@ -528,6 +556,7 @@ export const getListing = async (req, res) => {
       .populate("storeId", "name slug")
       .lean();
     if (!listing) {
+      console.log("Listing not found for query:", query);
       return res.status(404).json({
         success: false,
         message: "Listing not found",
