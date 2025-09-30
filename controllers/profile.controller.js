@@ -745,8 +745,6 @@ export const syncAllAvatarsToUsers = async () => {
       },
     }).select("user personal.avatar personal.avatar_public_id");
 
-    console.log(`Found ${profiles.length} profiles with avatars to sync`);
-
     for (const profile of profiles) {
       if (
         profile.personal.avatar &&

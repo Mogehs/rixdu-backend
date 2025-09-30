@@ -2,6 +2,7 @@ import User from "../models/User.js";
 import crypto from "crypto";
 import axios from "axios";
 import process from "process";
+import mongoose from "mongoose";
 import {
   sendEmail,
   getVerificationEmailTemplate,
@@ -708,9 +709,10 @@ export const auth0Login = async (req, res) => {
       email: userInfoResponse.data.email,
       name: userInfoResponse.data.name,
       sub: userInfoResponse.data.sub,
+      picture: userInfoResponse.data.picture,
     });
 
-    const { email, name, sub } = userInfoResponse.data;
+    const { email, name, sub, picture } = userInfoResponse.data;
 
     if (!sub) {
       console.error("Auth0 Login - No sub claim in user info");
@@ -737,6 +739,12 @@ export const auth0Login = async (req, res) => {
         user.isVerified = true;
         user.verificationMethod = "auth0";
 
+        // Update avatar if picture is provided
+        if (picture) {
+          user.avatar = picture;
+          console.log("Auth0 Login - Updated existing user avatar:", picture);
+        }
+
         await user.save();
       }
     }
@@ -751,6 +759,7 @@ export const auth0Login = async (req, res) => {
         isVerified: true,
         verificationMethod: "auth0",
         role: "user",
+        ...(picture && { avatar: picture }), // Add avatar if picture is provided
       });
       await user.save();
 
@@ -763,6 +772,49 @@ export const auth0Login = async (req, res) => {
           `Error queueing profile creation job for Auth0 user: ${profileJobError.message}`
         );
         // Continue with login even if profile job queueing fails
+      }
+    } else {
+      // For existing users, update avatar if picture is provided and different
+      if (picture && user.avatar !== picture) {
+        user.avatar = picture;
+        await user.save();
+        console.log("Auth0 Login - Updated existing user avatar:", picture);
+      }
+    }
+
+    // Sync avatar to Profile model
+    if (picture || user.avatar) {
+      try {
+        const Profile = mongoose.model("Profile");
+        let profile = await Profile.findOne({ user: user._id });
+
+        if (!profile) {
+          // Create profile if it doesn't exist
+          profile = await Profile.create({
+            user: user._id,
+            personal: {
+              avatar: picture || user.avatar,
+            },
+            jobProfile: {},
+            favorites: { listings: [] },
+          });
+          console.log(
+            `Profile created with avatar for Auth0 user: ${user._id}`
+          );
+        } else {
+          // Update existing profile avatar
+          if (!profile.personal) {
+            profile.personal = {};
+          }
+          profile.personal.avatar = picture || user.avatar;
+          await profile.save();
+          console.log(`Profile avatar synced for Auth0 user: ${user._id}`);
+        }
+      } catch (profileError) {
+        console.error(
+          `Error syncing avatar to profile: ${profileError.message}`
+        );
+        // Continue with login even if profile sync fails
       }
     }
 
