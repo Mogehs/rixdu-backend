@@ -265,16 +265,23 @@ listingSchema.pre("save", function (next) {
         titleValue = this.values.get("title") || this.values.get("name");
       }
 
+      // Generate a unique timestamp-based ID
+      const timestamp = Date.now().toString(36);
+      const randomStr = Math.random().toString(36).substring(2, 8);
+
       if (titleValue) {
         const baseSlug = String(titleValue)
           .toLowerCase()
           .replace(/[^\w\s-]/g, "")
           .replace(/[\s_-]+/g, "-")
-          .replace(/^-+|-+$/g, "");
+          .replace(/^-+|-+$/g, "")
+          .substring(0, 30); // Limit length
 
-        this.slug = `${baseSlug}-${Math.random().toString(36).substring(2, 8)}`;
+        // Format: [base-slug]_timestamp_random - can never be a MongoDB ObjectId
+        this.slug = `[${baseSlug}]_${timestamp}_${randomStr}`;
       } else {
-        this.slug = `listing-${Math.random().toString(36).substring(2, 15)}`;
+        // Format: [listing]_timestamp_random - can never be a MongoDB ObjectId
+        this.slug = `[listing]_${timestamp}_${randomStr}`;
       }
     }
     next();
