@@ -1921,24 +1921,68 @@ export const getListingsByCity = async (req, res) => {
     ).lean();
     const excludedStoreIds = excludedStores.map((store) => store._id);
     const query = {};
-    if (city) {
-      query.city = { $regex: city, $options: "i" };
+
+    if (city && city.trim()) {
+      // Create a simple pattern that handles both spaces and hyphens
+      const cityPattern = city.trim().replace(/\s+/g, "[-\\s]*");
+
+      query.$or = [
+        { city: { $regex: cityPattern, $options: "i" } },
+        { "values.city": { $regex: cityPattern, $options: "i" } },
+        { "values.location": { $regex: cityPattern, $options: "i" } },
+        { "values.address": { $regex: cityPattern, $options: "i" } },
+        { location: { $regex: cityPattern, $options: "i" } },
+      ];
     }
+
     if (categoryId) {
-      query.$or = [{ categoryId }, { categoryPath: { $in: [categoryId] } }];
+      const categoryQuery = {
+        $or: [{ categoryId }, { categoryPath: { $in: [categoryId] } }],
+      };
+      if (query.$or) {
+        // Combine city and category filters using $and
+        query.$and = [{ $or: query.$or }, categoryQuery];
+        delete query.$or;
+      } else {
+        query.$or = categoryQuery.$or;
+      }
     }
+
     if (storeId) {
       query.storeId = storeId;
     } else if (excludedStoreIds.length > 0) {
       query.storeId = { $nin: excludedStoreIds };
     }
+
+    if (city && city.trim()) {
+      const sampleListings = await Listing.find({
+        storeId: { $nin: excludedStoreIds },
+      })
+        .limit(5)
+        .select("city values.city location values.location")
+        .lean();
+    }
+
     const skip = (Number(page) - 1) * Number(limit);
     const listings = await Listing.find(query)
       .skip(skip)
       .limit(Number(limit))
       .populate("categoryId", "name slug icon")
-      .populate("storeId", "name");
+      .populate("storeId", "name")
+      .lean();
     const total = await Listing.countDocuments(query);
+
+    console.log(`Found ${listings.length} listings for city: "${city}"`);
+    console.log(
+      "Sample listing cities from results:",
+      listings.slice(0, 3).map((l) => ({
+        id: l._id,
+        city: l.city,
+        valuesCity: l.values?.city,
+        location: l.location,
+      }))
+    );
+
     res.status(200).json({
       success: true,
       count: listings.length,
