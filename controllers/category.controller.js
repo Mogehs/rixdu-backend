@@ -898,7 +898,16 @@ export const getCategoryChildren = async (req, res) => {
 };
 
 // Helper function to find all leaf categories that are descendants of a parent category
+// If parentId is null, returns all leaf categories in the store
 const findAllLeafChildren = async (parentId, storeId) => {
+  // If parentId is null, return all leaf categories in the store
+  if (parentId === null || parentId === undefined) {
+    return await Category.find({
+      storeId: storeId,
+      isLeaf: true,
+    });
+  }
+
   const allDescendants = [];
 
   // Recursive function to get all descendants
@@ -931,6 +940,7 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
   try {
     const { categoryId } = req.params;
     const { fields } = req.body;
+    console.log(categoryId, fields);
 
     // Validate categoryId
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
@@ -962,11 +972,16 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
       entityName = parentCategory.name;
       storeId = parentCategory.storeId;
 
-      // Find all leaf children of this category
-      leafChildren = await findAllLeafChildren(
-        categoryId,
-        parentCategory.storeId
-      );
+      // If this category itself is a leaf, include it and its descendants
+      if (parentCategory.isLeaf) {
+        leafChildren = [parentCategory];
+      } else {
+        // Find all leaf children of this category
+        leafChildren = await findAllLeafChildren(
+          categoryId,
+          parentCategory.storeId
+        );
+      }
     } else {
       // Try to find as a store
       store = await Store.findById(categoryId);
@@ -978,12 +993,12 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
         });
       }
 
-      // It's a store ID
+      // It's a store ID - find all leaf categories in this store
       entityType = "store";
       entityName = store.name;
       storeId = store._id;
 
-      // Find all leaf categories in this store
+      // Find all leaf categories in this store (including top-level ones with no parent)
       leafChildren = await findAllLeafCategoriesInStore(store._id);
     }
 
