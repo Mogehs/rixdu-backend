@@ -259,29 +259,31 @@ listingSchema.pre("save", function (next) {
 
   try {
     if (!this.slug) {
-      // Safety check - ensure values exists and is a Map
+      // Generate slug using the new format when created through the API
+      // This will be handled by the controller's generateUniqueSlug function
+      // For direct model saves, use a simple fallback
       let titleValue = null;
       if (this.values && typeof this.values.get === "function") {
         titleValue = this.values.get("title") || this.values.get("name");
       }
 
-      // Generate a unique timestamp-based ID
       const timestamp = Date.now().toString(36);
-      const randomStr = Math.random().toString(36).substring(2, 8);
+      const randomStr = Math.random().toString(36).substring(2, 6);
+      const uniqueId = `${timestamp}${randomStr}`;
 
       if (titleValue) {
-        const baseSlug = String(titleValue)
+        const titleSlug = String(titleValue)
           .toLowerCase()
           .replace(/[^\w\s-]/g, "")
           .replace(/[\s_-]+/g, "-")
           .replace(/^-+|-+$/g, "")
-          .substring(0, 30); // Limit length
+          .substring(0, 40);
 
-        // Format: [base-slug]_timestamp_random - can never be a MongoDB ObjectId
-        this.slug = `[${baseSlug}]_${timestamp}_${randomStr}`;
+        // Simple format for direct model saves: /title-uniqueId
+        this.slug = `/${titleSlug}-${uniqueId}`;
       } else {
-        // Format: [listing]_timestamp_random - can never be a MongoDB ObjectId
-        this.slug = `[listing]_${timestamp}_${randomStr}`;
+        // Fallback format: /listing-uniqueId
+        this.slug = `/listing-${uniqueId}`;
       }
     }
     next();

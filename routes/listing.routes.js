@@ -65,16 +65,17 @@ router.route("/by-city/listing").get(getListingsByCity);
 
 router.route("/store/:storeSlugOrId").get(getListingsByStore);
 
-router
-  .route("/:id")
-  .get(getListing)
-  .put(
-    protect,
-    uploadFiles.array("files", 15),
-    handleUploadError,
-    processFileUploads,
-    updateListing
-  )
-  .delete(protect, deleteListing);
+// Handle single listing by ID or multi-segment slug
+// This must be the last route to catch all remaining paths
+router.get("/:slug(*)", getListing);
+router.put(
+  "/:slug(*)",
+  protect,
+  uploadFiles.array("files", 15),
+  handleUploadError,
+  processFileUploads,
+  updateListing
+);
+router.delete("/:slug(*)", protect, deleteListing);
 
 export default router;

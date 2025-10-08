@@ -102,24 +102,95 @@ const formatNumber = (n) => {
   return n;
 };
 
-// Generate a unique slug that can never be a MongoDB ObjectId
-const generateUniqueSlug = (title = null) => {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 8);
+// Generate a unique slug based on category path and title
+const generateUniqueSlug = async (
+  title = null,
+  categoryPath = [],
+  categoryId = null
+) => {
+  try {
+    const timestamp = Date.now().toString(36);
+    const randomStr = Math.random().toString(36).substring(2, 6);
+    const uniqueId = `${timestamp}${randomStr}`;
 
-  if (title) {
-    const baseSlug = String(title)
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/[\s_-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .substring(0, 30); // Limit length
+    // Get category names for the path
+    let categorySegments = [];
 
-    // Format: [base-slug]_timestamp_random - can never be a MongoDB ObjectId
-    return `[${baseSlug}]_${timestamp}_${randomStr}`;
-  } else {
-    // Format: [listing]_timestamp_random - can never be a MongoDB ObjectId
-    return `[listing]_${timestamp}_${randomStr}`;
+    if (categoryPath && categoryPath.length > 0) {
+      // Get category names from categoryPath
+      const categories = await Category.find({
+        _id: { $in: categoryPath },
+      })
+        .select("name slug")
+        .lean();
+
+      // Sort categories by their position in the path
+      const sortedCategories = categoryPath
+        .map((pathId) =>
+          categories.find((cat) => cat._id.toString() === pathId.toString())
+        )
+        .filter(Boolean);
+
+      categorySegments = sortedCategories.map((cat) =>
+        (cat.slug || cat.name)
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/[\s_-]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+      );
+    } else if (categoryId) {
+      // Fallback: get single category if no path
+      const category = await Category.findById(categoryId)
+        .select("name slug")
+        .lean();
+      if (category) {
+        const categorySlug = (category.slug || category.name)
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/[\s_-]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        categorySegments = [categorySlug];
+      }
+    }
+
+    // Process title
+    let titleSlug = "";
+    if (title && String(title).trim()) {
+      titleSlug = String(title)
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, "")
+        .replace(/[\s_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .substring(0, 40); // Limit title length
+    }
+
+    // Build the final slug: /category/subcategory/title-uniqueId
+    const pathSegments = [...categorySegments];
+
+    if (titleSlug) {
+      pathSegments.push(`${titleSlug}-${uniqueId}`);
+    } else {
+      pathSegments.push(`listing-${uniqueId}`);
+    }
+
+    // Join with "/" and ensure it starts with "/"
+    const finalSlug = "/" + pathSegments.filter(Boolean).join("/");
+
+    console.log("Generated slug:", finalSlug);
+    return finalSlug;
+  } catch (error) {
+    console.error("Error generating slug:", error);
+    // Fallback to simple slug
+    const timestamp = Date.now().toString(36);
+    const randomStr = Math.random().toString(36).substring(2, 6);
+    const titleSlug = title
+      ? String(title)
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, "")
+          .replace(/[\s_-]+/g, "-")
+          .substring(0, 20)
+      : "listing";
+    return `/${titleSlug}-${timestamp}${randomStr}`;
   }
 };
 export const capitalizeWords = (str = "") =>
@@ -326,10 +397,10 @@ export const createListing = async (req, res) => {
             /health/i.test(store.slug) ||
             /care/i.test(store.slug))))
     );
-    // Generate a unique slug that can never be a MongoDB ObjectId
+    // Generate a unique slug based on category path and title
     const titleValue =
       transformedValues.get("title") || transformedValues.get("name");
-    const slug = generateUniqueSlug(titleValue);
+    const slug = await generateUniqueSlug(titleValue, categoryPath, categoryId);
 
     const listing = await Listing.create({
       storeId,
@@ -542,13 +613,25 @@ export const getListings = async (req, res) => {
 };
 export const getListing = async (req, res) => {
   try {
-    const { id } = req.params;
-    console.log(id);
+    // Get the slug parameter which can contain multiple segments
+    const identifier = req.params.slug;
+
+    console.log("=== LISTING REQUEST DEBUG ===");
+    console.log("Identifier:", identifier);
+    console.log("Request path:", req.path);
+    console.log("Request params:", req.params);
+    console.log("Request URL:", req.url);
+    console.log("===============================");
+
     let query = {};
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      query._id = id;
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      query._id = identifier;
     } else {
-      query.slug = id;
+      // For slugs, ensure they start with a forward slash as stored in DB
+      const slugWithSlash = identifier.startsWith("/")
+        ? identifier
+        : `/${identifier}`;
+      query.slug = slugWithSlash;
     }
     const listing = await Listing.findOne(query)
       .populate("categoryId", "name slug fields")
@@ -577,13 +660,19 @@ export const getListing = async (req, res) => {
 };
 export const updateListing = async (req, res) => {
   try {
-    const listingIdOrSlug = req.params.id;
+    // Get the slug parameter which can contain multiple segments
+    const identifier = req.params.slug;
+
     let listing;
-    if (mongoose.Types.ObjectId.isValid(listingIdOrSlug)) {
-      listing = await Listing.findById(listingIdOrSlug);
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      listing = await Listing.findById(identifier);
     }
     if (!listing) {
-      listing = await Listing.findOne({ slug: listingIdOrSlug });
+      // For slugs, ensure they start with a forward slash as stored in DB
+      const slugWithSlash = identifier.startsWith("/")
+        ? identifier
+        : `/${identifier}`;
+      listing = await Listing.findOne({ slug: slugWithSlash });
     }
     if (!listing) {
       return res.status(404).json({
@@ -798,6 +887,33 @@ export const updateListing = async (req, res) => {
       }
       req.body.values = transformedValues;
     }
+
+    // Regenerate slug if title or category changed
+    const titleChanged =
+      req.body.values &&
+      (req.body.values.title !== listing.values?.get?.("title") ||
+        req.body.values.name !== listing.values?.get?.("name"));
+    const categoryChanged =
+      req.body.categoryId &&
+      req.body.categoryId !== listing.categoryId.toString();
+
+    if (titleChanged || categoryChanged) {
+      const titleValue =
+        req.body.values?.title ||
+        req.body.values?.name ||
+        listing.values?.get?.("title") ||
+        listing.values?.get?.("name");
+      const categoryPath = req.body.categoryPath || listing.categoryPath;
+      const categoryId = req.body.categoryId || listing.categoryId;
+
+      const newSlug = await generateUniqueSlug(
+        titleValue,
+        categoryPath,
+        categoryId
+      );
+      req.body.slug = newSlug;
+    }
+
     const updatedListing = await Listing.findByIdAndUpdate(
       listing._id,
       { ...req.body, updatedAt: Date.now() },
@@ -836,7 +952,21 @@ export const updateListing = async (req, res) => {
 };
 export const deleteListing = async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id);
+    // Get the slug parameter which can contain multiple segments
+    const identifier = req.params.slug;
+
+    let listing;
+    if (mongoose.Types.ObjectId.isValid(identifier)) {
+      listing = await Listing.findById(identifier);
+    }
+    if (!listing) {
+      // For slugs, ensure they start with a forward slash as stored in DB
+      const slugWithSlash = identifier.startsWith("/")
+        ? identifier
+        : `/${identifier}`;
+      listing = await Listing.findOne({ slug: slugWithSlash });
+    }
+
     if (!listing) {
       return res.status(404).json({
         success: false,

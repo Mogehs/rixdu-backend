@@ -10,6 +10,8 @@
     "dev:worker": "nodemon workers/start.js",
     "dev:full": "concurrently \"npm run dev\" \"npm run dev:worker\"",
     "start:full": "concurrently \"npm start\" \"npm run worker\"",
+    "migrate:slugs": "node scripts/migrateSlugs.js",
+    "migrate:slugs:dry-run": "node scripts/migrateSlugs.js --dry-run",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
