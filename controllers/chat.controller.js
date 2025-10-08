@@ -126,8 +126,8 @@ export const getUserChats = async (req, res) => {
     const chats = await Chat.find({
       $or: [{ sender: userId }, { receiver: userId }],
     })
-      .populate("sender")
-      .populate("receiver")
+      .populate("sender", "name username email avatar isOnline")
+      .populate("receiver", "name username email avatar isOnline")
       .populate({
         path: "listing",
         select: "values slug storeId",
@@ -137,20 +137,39 @@ export const getUserChats = async (req, res) => {
         },
       })
       .lean()
-      .sort({ lastMessageAt: -1 });
+      .sort({ lastMessageAt: -1, updatedAt: -1 });
 
-    const chatsWithUnread = await Promise.all(
+    const chatsWithMetadata = await Promise.all(
       chats.map(async (chat) => {
+        // Get unread count
         const unreadCount = await Message.countUnreadMessages(chat._id, userId);
+
+        // Get last message if not already present
+        let lastMessage = chat.lastMessage;
+        let lastMessageTime = chat.lastMessageAt;
+
+        if (!lastMessage) {
+          const recentMessage = await Message.findOne({ chat: chat._id })
+            .sort({ timestamp: -1 })
+            .select("content timestamp")
+            .lean();
+
+          if (recentMessage) {
+            lastMessage = recentMessage.content;
+            lastMessageTime = recentMessage.timestamp;
+          }
+        }
 
         return {
           ...chat,
           unreadCount,
+          lastMessage,
+          lastMessageTime: lastMessageTime || chat.updatedAt,
         };
       })
     );
 
-    res.status(200).json(chatsWithUnread);
+    res.status(200).json(chatsWithMetadata);
   } catch (error) {
     console.error("Error in getUserChats:", error);
     res.status(500).json({ message: "Internal server error" });
