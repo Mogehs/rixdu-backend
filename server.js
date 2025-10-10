@@ -8,8 +8,8 @@ import cluster from "cluster";
 import os from "os";
 import helmet from "helmet";
 import compression from "compression";
-import rateLimit from "express-rate-limit";
 import connectDB from "./config/db.js";
+import { apiLimiter } from "./utils/redisRateLimit.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import storeRoutes from "./routes/store.routes.js";
@@ -133,23 +133,7 @@ if (
   // =============================
   // Rate Limiting
   // =============================
-  const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: process.env.NODE_ENV === "production" ? 50 : 100, // keep stricter in prod
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: "Too many requests from this IP, please try again later.",
-    skipSuccessfulRequests: true,
-    skipFailedRequests: true,
-    skip: (req) => req.url === "/favicon.ico",
-    handler: (req, res, _next, options) => {
-      logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-      res.status(options.statusCode).json({
-        status: "error",
-        message: options.message,
-      });
-    },
-  });
+  // Apply Redis-based rate limiting to all API routes
   app.use("/api/", apiLimiter);
 
   // =============================

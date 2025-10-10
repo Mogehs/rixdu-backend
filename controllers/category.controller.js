@@ -17,10 +17,12 @@ const invalidateCategoryCache = async (storeId = null, categoryId = null) => {
     keysToDelete.push("category:*");
     keysToDelete.push("category_tree:*");
     keysToDelete.push("category_search:*");
+    keysToDelete.push("dynamic_filters:*");
 
     if (storeId) {
       keysToDelete.push(`categories:store:${storeId}:*`);
       keysToDelete.push(`category_tree:${storeId}`);
+      keysToDelete.push(`dynamic_filters:store:*`);
     }
 
     if (categoryId) {
@@ -933,6 +935,261 @@ const findAllLeafCategoriesInStore = async (storeId) => {
     storeId: storeId,
     isLeaf: true,
   });
+};
+
+// Helper function to recursively collect all leaf category fields
+const collectLeafCategoryFields = async (categoryId, storeId) => {
+  const fieldsMap = new Map();
+
+  const processCategory = async (catId) => {
+    const category = await Category.findById(catId).lean();
+
+    if (!category) return;
+
+    if (category.isLeaf && category.fields && category.fields.length > 0) {
+      // Process fields from leaf category
+      category.fields.forEach((field) => {
+        if (!fieldsMap.has(field.name)) {
+          fieldsMap.set(field.name, {
+            name: field.name,
+            type: field.type,
+            options: field.options || [],
+            required: field.required || false,
+            accept: field.accept,
+            multiple: field.multiple || false,
+            maxSize: field.maxSize,
+            maxFiles: field.maxFiles,
+            minFiles: field.minFiles,
+            categories: [],
+          });
+        }
+
+        // Add category info to the field
+        fieldsMap.get(field.name).categories.push({
+          _id: category._id,
+          name: category.name,
+          slug: category.slug,
+        });
+
+        // Merge options if they exist
+        if (field.options && field.options.length > 0) {
+          const existingField = fieldsMap.get(field.name);
+          const allOptions = [
+            ...new Set([...existingField.options, ...field.options]),
+          ];
+          existingField.options = allOptions;
+        }
+      });
+    }
+
+    // Process children
+    if (category.children && category.children.length > 0) {
+      for (const childId of category.children) {
+        await processCategory(childId);
+      }
+    }
+  };
+
+  await processCategory(categoryId);
+  return Array.from(fieldsMap.values());
+};
+
+// API to get dynamic filter fields from category hierarchy
+export const getDynamicFilterFields = async (req, res) => {
+  try {
+    const { categorySlug, storeSlug } = req.params;
+
+    // Generate cache key
+    const cacheKey = `dynamic_filters:store:${storeSlug}:category:${categorySlug}`;
+
+    let responseData;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        const dataHash = crypto
+          .createHash("md5")
+          .update(cachedData)
+          .digest("hex");
+        const etag = `"${dataHash}"`;
+
+        const clientETag = req.headers["if-none-match"];
+        if (clientETag === etag) {
+          return res.status(304).end();
+        }
+
+        responseData = JSON.parse(cachedData);
+
+        res.set("ETag", etag);
+        res.set("Cache-Control", "private, max-age=0, must-revalidate");
+        return res.status(200).json(responseData);
+      }
+    } catch (cacheError) {
+      console.warn("Redis cache read error:", cacheError.message);
+    }
+
+    // Find store by slug
+    const store = await Store.findOne({ slug: storeSlug }).lean();
+    if (!store) {
+      return res.status(404).json({
+        success: false,
+        message: "Store not found",
+      });
+    }
+
+    // Find category by slug within the store
+    const category = await Category.findOne({
+      slug: categorySlug,
+      storeId: store._id,
+    }).lean();
+
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found in the specified store",
+      });
+    }
+
+    let allFields = [];
+
+    // Common fields to exclude from filters (these are typically displayed in listings)
+    const excludedFields = ["title", "description"];
+
+    if (category.isLeaf) {
+      // If it's a leaf category, get its fields
+      if (category.fields && category.fields.length > 0) {
+        allFields = category.fields
+          .filter((field) => !excludedFields.includes(field.name.toLowerCase()))
+          .map((field) => ({
+            name: field.name,
+            type: field.type,
+            options: field.options || [],
+            required: field.required || false,
+            accept: field.accept,
+            multiple: field.multiple || false,
+            maxSize: field.maxSize,
+            maxFiles: field.maxFiles,
+            minFiles: field.minFiles,
+            categories: [
+              {
+                _id: category._id,
+                name: category.name,
+                slug: category.slug,
+              },
+            ],
+          }));
+      }
+    } else {
+      // If it has children, traverse and collect all leaf category fields
+      allFields = await collectLeafCategoryFields(category._id, store._id);
+
+      // Filter out excluded fields
+      allFields = allFields.filter(
+        (field) => !excludedFields.includes(field.name.toLowerCase())
+      );
+    }
+
+    // Process fields for dynamic filter generation
+    const filterableFields = allFields.map((field) => {
+      const filterField = {
+        name: field.name,
+        type: field.type,
+        filterType: getFilterType(field.type),
+        options: field.options || [],
+        multiple: field.multiple || false,
+        categories: field.categories || [],
+      };
+
+      // Add specific properties based on field type
+      if (field.type === "select" || field.type === "radio") {
+        filterField.hasOptions = true;
+      }
+
+      if (field.type === "number") {
+        filterField.supportsRange = true;
+      }
+
+      if (field.type === "date") {
+        filterField.supportsDateRange = true;
+      }
+
+      return filterField;
+    });
+
+    // Group fields by type for better organization
+    const groupedFields = {
+      select: filterableFields.filter(
+        (f) => f.type === "select" || f.type === "radio"
+      ),
+      range: filterableFields.filter((f) => f.type === "number"),
+      date: filterableFields.filter((f) => f.type === "date"),
+      checkbox: filterableFields.filter((f) => f.type === "checkbox"),
+      text: filterableFields.filter(
+        (f) => f.type === "text" || f.type === "input"
+      ),
+    };
+
+    responseData = {
+      success: true,
+      store: {
+        _id: store._id,
+        name: store.name,
+        slug: store.slug,
+      },
+      category: {
+        _id: category._id,
+        name: category.name,
+        slug: category.slug,
+        isLeaf: category.isLeaf,
+        level: category.level,
+      },
+      data: {
+        fields: filterableFields,
+        groupedFields,
+        totalFields: filterableFields.length,
+        fieldTypes: Object.keys(groupedFields).filter(
+          (key) => groupedFields[key].length > 0
+        ),
+      },
+    };
+
+    const responseString = JSON.stringify(responseData);
+    const dataHash = crypto
+      .createHash("md5")
+      .update(responseString)
+      .digest("hex");
+    const etag = `"${dataHash}"`;
+
+    try {
+      await redis.setex(cacheKey, 1800, responseString); // 30 minutes cache
+    } catch (cacheError) {
+      console.warn("Redis cache write error:", cacheError.message);
+    }
+
+    res.set("ETag", etag);
+    res.set("Cache-Control", "private, max-age=0, must-revalidate");
+    res.status(200).json(responseData);
+  } catch (error) {
+    console.error("getDynamicFilterFields error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching dynamic filter fields. Please try again.",
+    });
+  }
+};
+
+// Helper function to determine filter type based on field type
+const getFilterType = (fieldType) => {
+  const filterTypeMap = {
+    select: "dropdown",
+    radio: "radio",
+    checkbox: "checkbox",
+    number: "range",
+    date: "daterange",
+    text: "search",
+    input: "search",
+  };
+
+  return filterTypeMap[fieldType] || "search";
 };
 
 // API to update fields for all leaf children of a parent category OR all leaf categories in a store

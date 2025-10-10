@@ -926,9 +926,6 @@ export const updateListing = async (req, res) => {
       try {
         const imageJob = await queueImageUpload(listing._id, req.queuedImages);
         imageUploadJobId = imageJob.id;
-        console.log(
-          `Queued ${req.queuedImages.images.length} images for processing during update (Job ID: ${imageUploadJobId})`
-        );
       } catch (error) {
         console.error("Error queuing image upload during update:", error);
         // Don't fail the listing update if image queuing fails
@@ -1834,16 +1831,38 @@ export const searchListings = async (req, res) => {
           return;
         if (!/^[a-zA-Z0-9_]+$/.test(key)) return;
         let value = rawValue;
-        if (typeof value === "string") {
+        // Skip JSON parsing for search and other text-based parameters
+        if (
+          typeof value === "string" &&
+          ![
+            "search",
+            "city",
+            "brand",
+            "model",
+            "fuelType",
+            "transmission",
+            "color",
+            "condition",
+            "location",
+            "address",
+            "emirate",
+            "area",
+            "purpose",
+            "propertyType",
+            "filter",
+            "category",
+            "subCategory",
+          ].includes(key)
+        ) {
           try {
             const parsed = JSON.parse(value);
             if (typeof parsed === "object" && parsed !== null) {
               value = parsed;
             }
           } catch (e) {
+            // Silently handle JSON parsing errors for non-JSON strings
             console.log(
-              `${e}............Value for key ${key} is not JSON:`,
-              value
+              `JSON parsing failed for key: ${key}, Value: ${value}. Treating as string.`
             );
           }
         }
@@ -1922,17 +1941,114 @@ export const searchListings = async (req, res) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
+
+    // Calculate total count first (needed for all sorting types)
+    const total = await Listing.countDocuments(query);
+
     let sortObj = {};
     const sortParam = req.query.sort || sort;
+
+    // Handle price sorting with aggregation pipeline for proper price field handling
+    if (
+      sortParam === "Lowest Starting Price" ||
+      sortParam === "Highest Starting Price"
+    ) {
+      const priceOrder = sortParam === "Lowest Starting Price" ? 1 : -1;
+
+      // Use aggregation pipeline to handle multiple price fields and null values
+      const pipeline = [
+        { $match: query },
+        {
+          $addFields: {
+            effectivePrice: {
+              $ifNull: [
+                {
+                  $switch: {
+                    branches: [
+                      {
+                        case: { $ne: ["$values.Price", null] },
+                        then: "$values.Price",
+                      },
+                      {
+                        case: { $ne: ["$values.price", null] },
+                        then: "$values.price",
+                      },
+                      {
+                        case: { $ne: ["$values.rent", null] },
+                        then: "$values.rent",
+                      },
+                      {
+                        case: { $ne: ["$values.cost", null] },
+                        then: "$values.cost",
+                      },
+                      {
+                        case: { $ne: ["$values.amount", null] },
+                        then: "$values.amount",
+                      },
+                      {
+                        case: { $ne: ["$values.budget", null] },
+                        then: "$values.budget",
+                      },
+                    ],
+                    default: null,
+                  },
+                },
+                Number.MAX_SAFE_INTEGER,
+              ],
+            },
+          },
+        },
+        {
+          $sort: {
+            effectivePrice: priceOrder,
+            createdAt: -1,
+          },
+        },
+        { $skip: skip },
+        { $limit: limitNum },
+      ];
+
+      // Execute aggregation pipeline for price sorting
+      const listings = await Listing.aggregate(pipeline);
+
+      // Populate the results since aggregation doesn't support populate directly
+      const populatedListings = await Listing.populate(listings, [
+        { path: "categoryId", select: "name slug icon" },
+        { path: "storeId", select: "name slug" },
+      ]);
+
+      const response = {
+        success: true,
+        count: populatedListings.length,
+        totalPages: Math.ceil(total / limitNum),
+        currentPage: pageNum,
+        total,
+        data: populatedListings,
+        ...(targetStore && {
+          store: {
+            _id: targetStore._id,
+            name: targetStore.name,
+            slug: targetStore.slug,
+          },
+        }),
+        ...(targetCategory && {
+          category: {
+            _id: targetCategory._id,
+            name: targetCategory.name,
+            slug: targetCategory.slug,
+            isLeaf: targetCategory.isLeaf,
+            childrenCount: targetCategory.childrenCount || 0,
+          },
+        }),
+      };
+
+      return res.status(200).json(response);
+    }
+
+    // Handle non-price sorting with regular sort
     switch (sortParam) {
       case "Popular":
         sortObj = { views: -1, createdAt: -1 };
-        break;
-      case "Lowest Starting Price":
-        sortObj = { "values.price": 1, "values.rent": 1, createdAt: -1 };
-        break;
-      case "Highest Starting Price":
-        sortObj = { "values.price": -1, "values.rent": -1, createdAt: -1 };
         break;
       case "newest":
         sortObj = { createdAt: -1 };
@@ -1947,17 +2063,14 @@ export const searchListings = async (req, res) => {
     if (fields) {
       fields.split(",").forEach((f) => (projection[f.trim()] = 1));
     }
-    const [listings, total] = await Promise.all([
-      Listing.find(query)
-        .populate("categoryId", "name slug icon")
-        .populate("storeId", "name slug")
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limitNum)
-        .select(Object.keys(projection).length ? projection : {})
-        .lean(),
-      Listing.countDocuments(query),
-    ]);
+    const listings = await Listing.find(query)
+      .populate("categoryId", "name slug icon")
+      .populate("storeId", "name slug")
+      .sort(sortObj)
+      .skip(skip)
+      .limit(limitNum)
+      .select(Object.keys(projection).length ? projection : {})
+      .lean();
     const response = {
       success: true,
       count: listings.length,
@@ -2261,6 +2374,7 @@ export const getVehicleListings = async (req, res) => {
       page = 1,
       limit = 20,
       fields,
+      search,
       ...rest
     } = req.query;
     const values = {
@@ -2325,33 +2439,54 @@ export const getVehicleListings = async (req, res) => {
         { categoryPath: { $in: categoryIdsToFilter } },
       ];
     }
+
+    // Handle search parameter separately
+    if (search && typeof search === "string" && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), "i");
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { "values.title": searchRegex },
+          { "values.Service Title": searchRegex },
+          { "values.description": searchRegex },
+        ],
+      });
+    }
+
     if (values && typeof values === "object") {
       Object.entries(values).forEach(([key, rawValue]) => {
         if (rawValue === undefined || rawValue === null || rawValue === "") {
           return;
         }
         let value = rawValue;
-        if (typeof value === "string") {
+        // Skip JSON parsing for search and other text-based parameters
+        if (
+          typeof value === "string" &&
+          ![
+            "search",
+            "city",
+            "brand",
+            "model",
+            "fuelType",
+            "transmission",
+            "color",
+            "condition",
+          ].includes(key)
+        ) {
           try {
             const parsed = JSON.parse(value);
             if (typeof parsed === "object" && parsed !== null) {
               value = parsed;
             }
           } catch (e) {
+            // Silently handle JSON parsing errors for non-JSON strings
             console.log(
-              e + "Error parsing JSON for key:",
-              key,
-              "Value:",
-              value
+              `JSON parsing failed for key: ${key}, Value: ${value}. Treating as string.`
             );
           }
         }
         const valueKey = `values.${key}`;
-        if (key === "search" && typeof value === "string" && value.trim()) {
-          const searchRegex = new RegExp(value.trim(), "i");
-          query.$and = query.$and || [];
-          query.$and.push({ $or: [{ "values.title": searchRegex }] });
-        } else if (
+        if (
           key === "city" &&
           typeof value === "string" &&
           value.trim() &&
