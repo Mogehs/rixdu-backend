@@ -1402,57 +1402,14 @@ export const getHealthcareListings = async (req, res) => {
       values = {},
       fields,
     } = req.query;
-    const healthcareStores = await Store.find(
-      {
-        $or: [
-          { name: /health.*care|care.*health/i },
-          { name: /health/i },
-          { name: /care/i },
-          { slug: /health.*care|care.*health/i },
-          { slug: /health/i },
-          { slug: /care/i },
-        ],
-      },
-      "_id"
-    ).lean();
-    const healthcareStoreIds = healthcareStores.map((store) => store._id);
-    if (healthcareStoreIds.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No healthcare store found",
-      });
-    }
-    const healthcareCategories = await Category.find(
-      {
-        $or: [
-          { name: /health/i },
-          { name: /care/i },
-          { name: /medical/i },
-          { name: /clinic/i },
-          { name: /hospital/i },
-          { name: /doctor/i },
-          { name: /nurse/i },
-          { name: /pharmacy/i },
-          { name: /therapy/i },
-          { name: /wellness/i },
-          { slug: /health/i },
-          { slug: /care/i },
-          { slug: /medical/i },
-          { slug: /clinic/i },
-          { slug: /hospital/i },
-          { slug: /doctor/i },
-          { slug: /nurse/i },
-          { slug: /pharmacy/i },
-          { slug: /therapy/i },
-          { slug: /wellness/i },
-        ],
-      },
-      "_id"
-    ).lean();
-    const healthcareCategoryIds = healthcareCategories.map((cat) => cat._id);
+
+    // Filter listings by serviceType = "healthcare"
     const query = {
-      storeId: { $in: healthcareStoreIds },
+      serviceType: "healthcare",
     };
+
+    console.log("Healthcare listings query params:", req.query);
+
     const categoryFilter = categoryId || categorySlug;
     if (categoryFilter) {
       let actualCategoryId = categoryFilter;
@@ -1460,7 +1417,6 @@ export const getHealthcareListings = async (req, res) => {
       if (!mongoose.Types.ObjectId.isValid(categoryFilter)) {
         targetCategory = await Category.findOne({
           slug: categoryFilter,
-          storeId: { $in: healthcareStoreIds },
         });
         if (!targetCategory) {
           return res.status(404).json({
@@ -1487,7 +1443,6 @@ export const getHealthcareListings = async (req, res) => {
               { parent: actualCategoryId },
               { path: { $regex: actualCategoryId.toString() } },
             ],
-            storeId: { $in: healthcareStoreIds },
           },
           "_id"
         ).lean();
@@ -1498,47 +1453,29 @@ export const getHealthcareListings = async (req, res) => {
         const childCategoryIds = childCategories.map((cat) => cat._id);
         categoryIdsToFilter = [...categoryIdsToFilter, ...childCategoryIds];
       }
-      if (healthcareCategoryIds.length > 0) {
-        query.$and = [
-          {
-            $or: [
-              { categoryId: { $in: categoryIdsToFilter } },
-              { categoryPath: { $in: categoryIdsToFilter } },
-            ],
-          },
-          {
-            $or: [
-              { categoryId: { $in: healthcareCategoryIds } },
-              { categoryPath: { $in: healthcareCategoryIds } },
-            ],
-          },
-        ];
-      } else {
-        query.$or = [
-          { categoryId: { $in: categoryIdsToFilter } },
-          { categoryPath: { $in: categoryIdsToFilter } },
-        ];
-      }
-    } else if (healthcareCategoryIds.length > 0) {
       query.$or = [
-        { categoryId: { $in: healthcareCategoryIds } },
-        { categoryPath: { $in: healthcareCategoryIds } },
+        { categoryId: { $in: categoryIdsToFilter } },
+        { categoryPath: { $in: categoryIdsToFilter } },
       ];
     }
     if (values && typeof values === "object") {
       Object.entries(values).forEach(([key, value]) => {
         if (key === "search" && typeof value === "string" && value.trim()) {
           const searchRegex = new RegExp(value.trim(), "i");
-          query.$or = query.$or || [];
-          query.$or.push(
-            { "values.doctorName": searchRegex },
-            { "values.name": searchRegex },
-            { "values.title": searchRegex },
-            { "values.specialty": searchRegex },
-            { "values.services": searchRegex },
-            { "values.about": searchRegex },
-            { "categoryId.name": searchRegex }
-          );
+          // Handle search with $and to avoid overwriting existing $or conditions
+          const searchCondition = {
+            $or: [
+              { "values.doctorName": searchRegex },
+              { "values.name": searchRegex },
+              { "values.title": searchRegex },
+              { "values.specialty": searchRegex },
+              { "values.services": searchRegex },
+              { "values.about": searchRegex },
+              { "categoryId.name": searchRegex },
+            ],
+          };
+          query.$and = query.$and || [];
+          query.$and.push(searchCondition);
         } else if (
           key === "city" &&
           typeof value === "string" &&
@@ -1546,12 +1483,16 @@ export const getHealthcareListings = async (req, res) => {
           value !== "all"
         ) {
           const cityRegex = new RegExp(value.trim().replace(/-/g, "\\s*"), "i");
-          query.$or = query.$or || [];
-          query.$or.push(
-            { "values.city": cityRegex },
-            { "values.location.address": cityRegex },
-            { city: cityRegex }
-          );
+          // Handle city filter with $and to avoid overwriting existing $or conditions
+          const cityCondition = {
+            $or: [
+              { "values.city": cityRegex },
+              { "values.location.address": cityRegex },
+              { city: cityRegex },
+            ],
+          };
+          query.$and = query.$and || [];
+          query.$and.push(cityCondition);
         } else if (key === "verified" && (value === "true" || value === true)) {
           query["values.verified"] = true;
         } else {
@@ -1598,6 +1539,9 @@ export const getHealthcareListings = async (req, res) => {
         projection[field.trim()] = 1;
       });
     }
+
+    console.log("Final healthcare query:", JSON.stringify(query, null, 2));
+
     const listings = await Listing.find(query)
       .populate({ path: "categoryId", select: "name slug icon" })
       .sort(sortObj)
@@ -1605,6 +1549,11 @@ export const getHealthcareListings = async (req, res) => {
       .limit(Number(limit))
       .select(Object.keys(projection).length ? projection : {});
     const total = await Listing.countDocuments(query);
+
+    console.log(
+      `Found ${total} healthcare listings, returning ${listings.length}`
+    );
+
     res.status(200).json({
       success: true,
       count: listings.length,

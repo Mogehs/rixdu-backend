@@ -11,7 +11,9 @@ export const getUsers = async (req, res) => {
     const queryObj = role ? { role } : {};
 
     const users = await User.find(queryObj)
-      .select("name email role phoneNumber avatar location createdAt")
+      .select(
+        "name email role phoneNumber avatar location createdAt documentVerification.status"
+      )
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -60,6 +62,48 @@ export const getUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error fetching user. Please try again.",
+    });
+  }
+};
+
+export const getUserVerificationStats = async (req, res) => {
+  try {
+    const stats = await User.aggregate([
+      {
+        $group: {
+          _id: "$documentVerification.status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const verificationStats = {
+      unverified: 0,
+      pending: 0,
+      verified: 0,
+      rejected: 0,
+      total: 0,
+    };
+
+    stats.forEach((stat) => {
+      if (stat._id) {
+        verificationStats[stat._id] = stat.count;
+      } else {
+        verificationStats.unverified = stat.count;
+      }
+      verificationStats.total += stat.count;
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: verificationStats,
+    });
+  } catch (error) {
+    console.error(`Error fetching verification stats: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error fetching verification statistics. Please try again.",
     });
   }
 };

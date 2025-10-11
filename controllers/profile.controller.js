@@ -54,9 +54,29 @@ export const getPublicProfile = async (req, res) => {
       });
     }
 
+    // Check if this is user's own profile
+    const requestingUserId = req.user?.id;
+
+    const isOwnProfile = requestingUserId && requestingUserId === userId;
+
+    // Debug logging
+    console.log("🔍 Backend getPublicProfile Debug:", {
+      requestingUserId,
+      profileUserId: userId,
+      isOwnProfile,
+      hasReqUser: !!req.user,
+      userIdComparison: `${requestingUserId} === ${userId}`,
+    });
+
+    // Add isOwnProfile flag to the response
+    const responseData = {
+      ...profile,
+      isOwnProfile,
+    };
+
     return res.status(200).json({
       success: true,
-      data: profile,
+      data: responseData,
     });
   } catch (error) {
     console.error(`Error fetching public profile: ${error.message}`);

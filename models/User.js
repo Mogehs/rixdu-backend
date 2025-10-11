@@ -81,6 +81,51 @@ const UserSchema = new mongoose.Schema(
     avatar_public_id: {
       type: String,
     },
+
+    // Document Verification Fields
+    documentVerification: {
+      status: {
+        type: String,
+        enum: ["unverified", "pending", "verified", "rejected"],
+        default: "unverified",
+      },
+      type: {
+        type: String,
+        enum: ["individual", "business"],
+      },
+      documents: {
+        // For Individuals
+        emiratesId: {
+          frontImage: String,
+          backImage: String,
+          idNumber: String,
+        },
+        // For Business Owners (includes Emirates ID + Business License)
+        businessLicense: {
+          image: String,
+          licenseNumber: String,
+          businessName: String,
+        },
+      },
+      contactNumber: {
+        type: String,
+        validate: {
+          validator: function (v) {
+            // UAE phone number validation
+            return /^(\+971|971|0)?[0-9]{9}$/.test(v);
+          },
+          message: "Please provide a valid UAE contact number",
+        },
+      },
+      submittedAt: Date,
+      verifiedAt: Date,
+      rejectedAt: Date,
+      rejectionReason: String,
+      reviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
   },
   {
     timestamps: true,
@@ -163,7 +208,7 @@ UserSchema.methods.generatePasswordResetToken = function () {
 UserSchema.statics.findByIdLean = function (id) {
   return this.findById(id)
     .select(
-      "name email role phoneNumber location isVerified verificationMethod avatar"
+      "name email role phoneNumber location isVerified verificationMethod avatar documentVerification.status documentVerification.type"
     )
     .lean();
 };
@@ -172,6 +217,14 @@ UserSchema.statics.findByEmailOrPhone = function (identifier) {
   return this.findOne({
     $or: [{ email: identifier }, { phoneNumber: identifier }],
   });
+};
+
+UserSchema.methods.isDocumentVerified = function () {
+  return this.documentVerification.status === "verified";
+};
+
+UserSchema.methods.canSubmitVerification = function () {
+  return ["unverified", "rejected"].includes(this.documentVerification.status);
 };
 
 const User = mongoose.model("User", UserSchema);

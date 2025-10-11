@@ -1,5 +1,5 @@
 import express from "express";
-import { protect } from "../middleware/auth.middleware.js";
+import { protect, optionalAuth } from "../middleware/auth.middleware.js";
 import { upload, resumeUpload } from "../middleware/multer.middleware.js";
 import {
   getCompleteProfile,
@@ -17,7 +17,7 @@ import {
 
 const router = express.Router();
 
-router.get("/public/:userId", getPublicProfile);
+router.get("/public/:userId", optionalAuth, getPublicProfile);
 router.get("/search", searchUsersBySkills);
 
 router.post("/favorites", protect, addToFavorites);

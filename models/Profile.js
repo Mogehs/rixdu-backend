@@ -40,7 +40,15 @@ const ProfileSchema = new mongoose.Schema(
       dateOfBirth: Date,
       gender: {
         type: String,
-        enum: ["male", "female", "other", "prefer not to say"],
+        enum: [
+          "Male",
+          "male",
+          "Female",
+          "female",
+          "Other",
+          "other",
+          "Prefer not to say",
+        ],
       },
       languages: [String],
       visaStatus: {

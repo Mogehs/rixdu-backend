@@ -53,3 +53,47 @@ export const authorize = (...roles) => {
     next();
   };
 };
+
+// Optional authentication middleware - sets req.user if token is valid, but doesn't block if no token
+export const optionalAuth = async (req, res, next) => {
+  try {
+    let token;
+
+    if (req.cookies.token) {
+      token = req.cookies.token;
+    } else if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
+    }
+
+    // If no token, continue without setting req.user
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id);
+
+      if (user) {
+        req.user = user;
+      } else {
+        req.user = null;
+      }
+    } catch (tokenError) {
+      // Invalid token, but don't block the request
+      console.warn("Invalid token in optionalAuth:", tokenError.message);
+      req.user = null;
+    }
+
+    next();
+  } catch (err) {
+    // Any other error, still don't block the request
+    console.error("Error in optionalAuth middleware:", err.message);
+    req.user = null;
+    next();
+  }
+};
