@@ -22,9 +22,7 @@ export const getOrCreateChat = async (req, res) => {
         },
       })
       .populate("sender")
-      .populate("receiver");
-
-    // If chat doesn't exist, create it
+      .populate("receiver");
     if (!chat) {
       chat = new Chat({
         listing: listingId,
@@ -33,9 +31,7 @@ export const getOrCreateChat = async (req, res) => {
         type: type || "other",
       });
 
-      await chat.save();
-
-      // Populate after saving
+      await chat.save();
       chat = await Chat.findById(chat._id)
         .populate({
           path: "listing",
@@ -51,7 +47,6 @@ export const getOrCreateChat = async (req, res) => {
 
     res.status(200).json(chat);
   } catch (error) {
-    console.error("Error getting or creating chat:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -60,9 +55,7 @@ export const getChatById = async (req, res) => {
   const { chatId } = req.params;
 
   try {
-    let query = {};
-
-    // Check if chatId is a valid ObjectId or treat as slug
+    let query = {};
     if (mongoose.Types.ObjectId.isValid(chatId)) {
       query._id = chatId;
     } else {
@@ -87,7 +80,6 @@ export const getChatById = async (req, res) => {
 
     res.status(200).json(chat);
   } catch (error) {
-    console.error("Error in getChatById:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -114,7 +106,6 @@ export const getChatBySlug = async (req, res) => {
 
     res.status(200).json(chat);
   } catch (error) {
-    console.error("Error in getChatBySlug:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -140,11 +131,8 @@ export const getUserChats = async (req, res) => {
       .sort({ lastMessageAt: -1, updatedAt: -1 });
 
     const chatsWithMetadata = await Promise.all(
-      chats.map(async (chat) => {
-        // Get unread count
-        const unreadCount = await Message.countUnreadMessages(chat._id, userId);
-
-        // Get last message if not already present
+      chats.map(async (chat) => {
+        const unreadCount = await Message.countUnreadMessages(chat._id, userId);
         let lastMessage = chat.lastMessage;
         let lastMessageTime = chat.lastMessageAt;
 
@@ -171,7 +159,6 @@ export const getUserChats = async (req, res) => {
 
     res.status(200).json(chatsWithMetadata);
   } catch (error) {
-    console.error("Error in getUserChats:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };

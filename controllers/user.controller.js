@@ -34,7 +34,6 @@ export const getUsers = async (req, res) => {
       data: users,
     });
   } catch (error) {
-    console.error(`Error fetching users: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching users. Please try again.",
@@ -58,7 +57,6 @@ export const getUser = async (req, res) => {
       data: user,
     });
   } catch (error) {
-    console.error(`Error fetching user ${req.params.id}: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching user. Please try again.",
@@ -99,7 +97,6 @@ export const getUserVerificationStats = async (req, res) => {
       data: verificationStats,
     });
   } catch (error) {
-    console.error(`Error fetching verification stats: ${error.message}`);
     return res.status(500).json({
       success: false,
       message:

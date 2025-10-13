@@ -3,6 +3,8 @@ import Listing from "../models/Listing.js";
 import Category from "../models/Category.js";
 import Profile from "../models/Profile.js";
 import Store from "../models/Store.js";
+import User from "../models/User.js";
+import Subscription from "../models/Subscription.js";
 import {
   resolveChannelsForUserStore,
   createAndDispatchNotification,
@@ -66,9 +68,7 @@ const selectPrimaryImage = (listing) => {
         }
       }
     }
-  } catch (e) {
-    console.log("Error selecting primary image:", e?.message || e);
-  }
+  } catch (e) {}
   return null;
 };
 const getListingTitle = (listing) => {
@@ -96,13 +96,10 @@ const formatNumber = (n) => {
   try {
     const num = Number(n);
     if (Number.isFinite(num)) return new Intl.NumberFormat().format(num);
-  } catch (e) {
-    console.log("Error formatting number:", e?.message || e);
-  }
+  } catch (e) {}
   return n;
 };
 
-// Generate a unique slug based on category path and title
 const generateUniqueSlug = async (
   title = null,
   categoryPath = [],
@@ -113,18 +110,15 @@ const generateUniqueSlug = async (
     const randomStr = Math.random().toString(36).substring(2, 6);
     const uniqueId = `${timestamp}${randomStr}`;
 
-    // Get category names for the path
     let categorySegments = [];
 
     if (categoryPath && categoryPath.length > 0) {
-      // Get category names from categoryPath
       const categories = await Category.find({
         _id: { $in: categoryPath },
       })
         .select("name slug")
         .lean();
 
-      // Sort categories by their position in the path
       const sortedCategories = categoryPath
         .map((pathId) =>
           categories.find((cat) => cat._id.toString() === pathId.toString())
@@ -139,7 +133,6 @@ const generateUniqueSlug = async (
           .replace(/^-+|-+$/g, "")
       );
     } else if (categoryId) {
-      // Fallback: get single category if no path
       const category = await Category.findById(categoryId)
         .select("name slug")
         .lean();
@@ -153,7 +146,6 @@ const generateUniqueSlug = async (
       }
     }
 
-    // Process title
     let titleSlug = "";
     if (title && String(title).trim()) {
       titleSlug = String(title)
@@ -164,7 +156,6 @@ const generateUniqueSlug = async (
         .substring(0, 40); // Limit title length
     }
 
-    // Build the final slug: /category/subcategory/title-uniqueId
     const pathSegments = [...categorySegments];
 
     if (titleSlug) {
@@ -173,14 +164,9 @@ const generateUniqueSlug = async (
       pathSegments.push(`listing-${uniqueId}`);
     }
 
-    // Join with "/" and ensure it starts with "/"
     const finalSlug = "/" + pathSegments.filter(Boolean).join("/");
-
-    console.log("Generated slug:", finalSlug);
     return finalSlug;
   } catch (error) {
-    console.error("Error generating slug:", error);
-    // Fallback to simple slug
     const timestamp = Date.now().toString(36);
     const randomStr = Math.random().toString(36).substring(2, 6);
     const titleSlug = title
@@ -236,6 +222,25 @@ const buildListingDetails = (listing, storeName) => {
 export const createListing = async (req, res) => {
   try {
     const { storeId, categoryId, values = {}, city } = req.body;
+
+    // Check user subscription eligibility first
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const canCreateResult = await user.canCreateListing();
+    if (!canCreateResult.canCreate) {
+      return res.status(403).json({
+        success: false,
+        message: canCreateResult.reason,
+        code: "SUBSCRIPTION_REQUIRED",
+      });
+    }
+
     const category = await Category.findById(categoryId).lean();
     if (!category) {
       return res.status(404).json({
@@ -285,7 +290,6 @@ export const createListing = async (req, res) => {
       const fieldName = field.name;
       const fieldValue = userValues[fieldName];
 
-      // Skip required validation for image/file fields when using queue
       const isImageOrFileField =
         field.type === "image" || field.type === "file";
       const shouldSkipRequiredValidation =
@@ -397,7 +401,7 @@ export const createListing = async (req, res) => {
             /health/i.test(store.slug) ||
             /care/i.test(store.slug))))
     );
-    // Generate a unique slug based on category path and title
+
     const titleValue =
       transformedValues.get("title") || transformedValues.get("name");
     const slug = await generateUniqueSlug(titleValue, categoryPath, categoryId);
@@ -482,23 +486,26 @@ export const createListing = async (req, res) => {
         io,
         extraUsers: [],
       });
+    } catch (e) {}
+    // Update user's subscription listing count
+    try {
+      const activeSubscription = await Subscription.findActiveSubscription(
+        req.user.id
+      );
+      if (activeSubscription) {
+        await activeSubscription.incrementListingCount();
+      }
     } catch (e) {
-      console.error("Notification dispatch error:", e?.message || e);
+      console.error("Error updating subscription listing count:", e);
+      // Don't fail the listing creation if subscription update fails
     }
 
-    // Handle queued image uploads if present
     let imageUploadJobId = null;
     if (req.queuedImages && req.queuedImages.images.length > 0) {
       try {
         const imageJob = await queueImageUpload(listing._id, req.queuedImages);
         imageUploadJobId = imageJob.id;
-        console.log(
-          `Queued ${req.queuedImages.images.length} images for processing (Job ID: ${imageUploadJobId})`
-        );
-      } catch (error) {
-        console.error("Error queuing image upload:", error);
-        // Don't fail the listing creation if image queuing fails
-      }
+      } catch (e) {}
     }
 
     res.status(201).json({
@@ -510,7 +517,6 @@ export const createListing = async (req, res) => {
         : "Listing created successfully.",
     });
   } catch (error) {
-    console.error(`Error creating listing: ${error}`);
     res.status(500).json({
       success: false,
       message: "Server error while creating listing. Please try again.",
@@ -613,21 +619,11 @@ export const getListings = async (req, res) => {
 };
 export const getListing = async (req, res) => {
   try {
-    // Get the slug parameter which can contain multiple segments
     const identifier = req.params.slug;
-
-    console.log("=== LISTING REQUEST DEBUG ===");
-    console.log("Identifier:", identifier);
-    console.log("Request path:", req.path);
-    console.log("Request params:", req.params);
-    console.log("Request URL:", req.url);
-    console.log("===============================");
-
     let query = {};
     if (mongoose.Types.ObjectId.isValid(identifier)) {
       query._id = identifier;
     } else {
-      // For slugs, ensure they start with a forward slash as stored in DB
       const slugWithSlash = identifier.startsWith("/")
         ? identifier
         : `/${identifier}`;
@@ -639,7 +635,6 @@ export const getListing = async (req, res) => {
       .populate("storeId", "name slug")
       .lean();
     if (!listing) {
-      console.log("Listing not found for query:", query);
       return res.status(404).json({
         success: false,
         message: "Listing not found",
@@ -651,7 +646,6 @@ export const getListing = async (req, res) => {
       data: listing,
     });
   } catch (error) {
-    console.error(`Error getting listing: ${error.message}`);
     res.status(500).json({
       success: false,
       message: "Server error while fetching listing",
@@ -660,7 +654,6 @@ export const getListing = async (req, res) => {
 };
 export const updateListing = async (req, res) => {
   try {
-    // Get the slug parameter which can contain multiple segments
     const identifier = req.params.slug;
 
     let listing;
@@ -668,7 +661,6 @@ export const updateListing = async (req, res) => {
       listing = await Listing.findById(identifier);
     }
     if (!listing) {
-      // For slugs, ensure they start with a forward slash as stored in DB
       const slugWithSlash = identifier.startsWith("/")
         ? identifier
         : `/${identifier}`;
@@ -733,9 +725,7 @@ export const updateListing = async (req, res) => {
       if (req.body.retainedFiles) {
         try {
           retainedFiles = JSON.parse(req.body.retainedFiles);
-        } catch (err) {
-          console.error("Error parsing retainedFiles:", err);
-        }
+        } catch (e) {}
       }
       for (const field of category.fields || []) {
         if (field.type === "file" || field.type === "image") {
@@ -769,7 +759,6 @@ export const updateListing = async (req, res) => {
             transformedValues.delete(fieldName);
           }
 
-          // Skip required validation for image/file fields when using queue
           if (
             field.required &&
             !hasQueuedImages &&
@@ -793,7 +782,6 @@ export const updateListing = async (req, res) => {
           continue;
         }
 
-        // For non-file fields, apply normal validation (not affected by queue)
         if (
           field.required &&
           (fieldValue === undefined || fieldValue === null || fieldValue === "")
@@ -888,7 +876,6 @@ export const updateListing = async (req, res) => {
       req.body.values = transformedValues;
     }
 
-    // Regenerate slug if title or category changed
     const titleChanged =
       req.body.values &&
       (req.body.values.title !== listing.values?.get?.("title") ||
@@ -920,16 +907,12 @@ export const updateListing = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    // Handle queued image uploads if present
     let imageUploadJobId = null;
     if (req.queuedImages && req.queuedImages.images.length > 0) {
       try {
         const imageJob = await queueImageUpload(listing._id, req.queuedImages);
         imageUploadJobId = imageJob.id;
-      } catch (error) {
-        console.error("Error queuing image upload during update:", error);
-        // Don't fail the listing update if image queuing fails
-      }
+      } catch (e) {}
     }
 
     res.status(200).json({
@@ -949,7 +932,6 @@ export const updateListing = async (req, res) => {
 };
 export const deleteListing = async (req, res) => {
   try {
-    // Get the slug parameter which can contain multiple segments
     const identifier = req.params.slug;
 
     let listing;
@@ -957,7 +939,6 @@ export const deleteListing = async (req, res) => {
       listing = await Listing.findById(identifier);
     }
     if (!listing) {
-      // For slugs, ensure they start with a forward slash as stored in DB
       const slugWithSlash = identifier.startsWith("/")
         ? identifier
         : `/${identifier}`;
@@ -1002,7 +983,6 @@ export const deleteListing = async (req, res) => {
       message: "Listing deleted successfully",
     });
   } catch (error) {
-    console.error(`Delete error: ${error.message}`);
     res.status(500).json({
       success: false,
       message: "Server error while deleting listing. Please try again.",
@@ -1114,14 +1094,9 @@ export const getJobsListings = async (req, res) => {
           },
           "_id"
         ).lean();
-        console.log(
-          `Found ${childCategories.length} child categories:`,
-          childCategories
-        );
         const childCategoryIds = childCategories.map((cat) => cat._id);
         categoryIdsToFilter = [...categoryIdsToFilter, ...childCategoryIds];
       }
-      console.log(`Category IDs to filter:`, categoryIdsToFilter);
       if (hiringCategoryIds.length > 0) {
         query.$and = [
           {
@@ -1257,7 +1232,6 @@ export const getHealthcareListingsByCategory = async (req, res) => {
     }
     let categoryIdsToFilter = [targetCategory._id];
     if (!targetCategory.isLeaf && targetCategory.childrenCount > 0) {
-      console.log(`Finding child categories for parent: ${targetCategory._id}`);
       const childCategories = await Category.find(
         {
           $or: [
@@ -1268,10 +1242,6 @@ export const getHealthcareListingsByCategory = async (req, res) => {
         },
         "_id"
       ).lean();
-      console.log(
-        `Found ${childCategories.length} child categories:`,
-        childCategories
-      );
       const childCategoryIds = childCategories.map((cat) => cat._id);
       categoryIdsToFilter = [...categoryIdsToFilter, ...childCategoryIds];
     }
@@ -1342,10 +1312,6 @@ export const getHealthcareListingsByCategory = async (req, res) => {
         }
       });
     }
-    console.log(
-      `Final healthcare category query:`,
-      JSON.stringify(query, null, 2)
-    );
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
@@ -1383,7 +1349,6 @@ export const getHealthcareListingsByCategory = async (req, res) => {
       data: listings,
     });
   } catch (error) {
-    console.error("Error fetching healthcare listings by category:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -1403,13 +1368,9 @@ export const getHealthcareListings = async (req, res) => {
       fields,
     } = req.query;
 
-    // Filter listings by serviceType = "healthcare"
     const query = {
       serviceType: "healthcare",
     };
-
-    console.log("Healthcare listings query params:", req.query);
-
     const categoryFilter = categoryId || categorySlug;
     if (categoryFilter) {
       let actualCategoryId = categoryFilter;
@@ -1436,7 +1397,6 @@ export const getHealthcareListings = async (req, res) => {
       }
       let categoryIdsToFilter = [actualCategoryId];
       if (!targetCategory.isLeaf && targetCategory.childrenCount > 0) {
-        console.log(`Finding child categories for parent: ${actualCategoryId}`);
         const childCategories = await Category.find(
           {
             $or: [
@@ -1446,10 +1406,6 @@ export const getHealthcareListings = async (req, res) => {
           },
           "_id"
         ).lean();
-        console.log(
-          `Found ${childCategories.length} child categories:`,
-          childCategories
-        );
         const childCategoryIds = childCategories.map((cat) => cat._id);
         categoryIdsToFilter = [...categoryIdsToFilter, ...childCategoryIds];
       }
@@ -1462,7 +1418,7 @@ export const getHealthcareListings = async (req, res) => {
       Object.entries(values).forEach(([key, value]) => {
         if (key === "search" && typeof value === "string" && value.trim()) {
           const searchRegex = new RegExp(value.trim(), "i");
-          // Handle search with $and to avoid overwriting existing $or conditions
+
           const searchCondition = {
             $or: [
               { "values.doctorName": searchRegex },
@@ -1483,7 +1439,7 @@ export const getHealthcareListings = async (req, res) => {
           value !== "all"
         ) {
           const cityRegex = new RegExp(value.trim().replace(/-/g, "\\s*"), "i");
-          // Handle city filter with $and to avoid overwriting existing $or conditions
+
           const cityCondition = {
             $or: [
               { "values.city": cityRegex },
@@ -1539,9 +1495,6 @@ export const getHealthcareListings = async (req, res) => {
         projection[field.trim()] = 1;
       });
     }
-
-    console.log("Final healthcare query:", JSON.stringify(query, null, 2));
-
     const listings = await Listing.find(query)
       .populate({ path: "categoryId", select: "name slug icon" })
       .sort(sortObj)
@@ -1549,11 +1502,6 @@ export const getHealthcareListings = async (req, res) => {
       .limit(Number(limit))
       .select(Object.keys(projection).length ? projection : {});
     const total = await Listing.countDocuments(query);
-
-    console.log(
-      `Found ${total} healthcare listings, returning ${listings.length}`
-    );
-
     res.status(200).json({
       success: true,
       count: listings.length,
@@ -1562,7 +1510,6 @@ export const getHealthcareListings = async (req, res) => {
       data: listings,
     });
   } catch (error) {
-    console.error("Error fetching healthcare listings:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -1590,8 +1537,10 @@ export const searchListings = async (req, res) => {
       beds,
       baths,
       propertyType,
+      store,
     } = req.query;
     const { storeSlug, categorySlug } = req.params;
+
     const query = {};
     const excludedStores = await Store.find(
       {
@@ -1613,27 +1562,31 @@ export const searchListings = async (req, res) => {
     const excludedStoreIds = excludedStores.map((s) => s._id);
     let targetStore = null;
     let targetCategory = null;
-    if (storeSlug) {
-      targetStore = mongoose.Types.ObjectId.isValid(storeSlug)
-        ? await Store.findById(storeSlug)
-        : await Store.findOne({ slug: storeSlug });
+
+    const storeIdentifier = storeSlug || store;
+    if (storeIdentifier) {
+      targetStore = mongoose.Types.ObjectId.isValid(storeIdentifier)
+        ? await Store.findById(storeIdentifier)
+        : await Store.findOne({ slug: storeIdentifier });
       if (!targetStore) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Store not found" });
+        return res.status(404).json({
+          success: false,
+          message: `Store '${storeIdentifier}' not found`,
+        });
       }
       query.storeId = targetStore._id;
     } else {
       query.storeId = { $nin: excludedStoreIds };
     }
-    let categoryToSearch = categorySlug || category;
-    if (categoryToSearch) {
-      targetCategory = mongoose.Types.ObjectId.isValid(categoryToSearch)
-        ? await Category.findById(categoryToSearch)
+
+    const categoryIdentifier = categorySlug || category;
+    if (categoryIdentifier) {
+      targetCategory = mongoose.Types.ObjectId.isValid(categoryIdentifier)
+        ? await Category.findById(categoryIdentifier)
         : await Category.findOne({
             $or: [
-              { slug: categoryToSearch },
-              { name: { $regex: categoryToSearch, $options: "i" } },
+              { slug: categoryIdentifier },
+              { name: { $regex: categoryIdentifier, $options: "i" } },
             ],
             ...(targetStore && { storeId: targetStore._id }),
           });
@@ -1656,6 +1609,7 @@ export const searchListings = async (req, res) => {
           { categoryId: { $in: categoryIdsToFilter } },
           { categoryPath: { $in: categoryIdsToFilter } },
         ];
+      } else {
       }
     }
     if (searchQuery && typeof searchQuery === "string" && searchQuery.trim()) {
@@ -1773,138 +1727,259 @@ export const searchListings = async (req, res) => {
         },
       ];
     }
+
+    const processedFilters = {};
+
+    Object.keys(req.query).forEach((key) => {
+      const match = key.match(/^values\[(.+)\]$/);
+      if (match) {
+        const fieldName = decodeURIComponent(match[1]).replace(/\+/g, " ");
+        processedFilters[fieldName] = req.query[key];
+      }
+    });
+
     if (values && typeof values === "object") {
+      Object.assign(processedFilters, values);
+    }
+    if (Object.keys(processedFilters).length > 0) {
       const categoryFields = targetCategory?.fields || [];
-      Object.entries(values).forEach(([key, rawValue]) => {
-        if (rawValue === undefined || rawValue === null || rawValue === "")
-          return;
-        if (!/^[a-zA-Z0-9_]+$/.test(key)) return;
-        let value = rawValue;
-        // Skip JSON parsing for search and other text-based parameters
+
+      Object.entries(processedFilters).forEach(([fieldName, fieldValue]) => {
         if (
-          typeof value === "string" &&
-          ![
-            "search",
-            "city",
-            "brand",
-            "model",
-            "fuelType",
-            "transmission",
-            "color",
-            "condition",
-            "location",
-            "address",
-            "emirate",
-            "area",
-            "purpose",
-            "propertyType",
-            "filter",
-            "category",
-            "subCategory",
-          ].includes(key)
+          fieldValue === undefined ||
+          fieldValue === null ||
+          fieldValue === "" ||
+          (Array.isArray(fieldValue) && fieldValue.length === 0)
         ) {
-          try {
-            const parsed = JSON.parse(value);
-            if (typeof parsed === "object" && parsed !== null) {
-              value = parsed;
-            }
-          } catch (e) {
-            // Silently handle JSON parsing errors for non-JSON strings
-            console.log(
-              `JSON parsing failed for key: ${key}, Value: ${value}. Treating as string.`
-            );
-          }
-        }
-        const valueKey = `values.${key}`;
-        const fieldDef = categoryFields.find((f) => f.name === key);
-        const buildRangeQuery = (val) => {
-          const range = {};
-          if (val.min !== undefined) range.$gte = Number(val.min);
-          if (val.max !== undefined) range.$lte = Number(val.max);
-          if (val.start !== undefined) range.$gte = new Date(val.start);
-          if (val.end !== undefined) range.$lte = new Date(val.end);
-          return range;
-        };
-        if (key === "location") return;
-        if (["price", "bedrooms", "bathrooms"].includes(key)) {
-          if (typeof value === "object") {
-            const rangeQuery = buildRangeQuery(value);
-            if (Object.keys(rangeQuery).length) {
-              query[valueKey] = rangeQuery;
-            }
-          } else {
-            query[valueKey] = Number(value);
-          }
           return;
         }
-        if (fieldDef) {
-          switch (fieldDef.type) {
-            case "number":
-              if (typeof value === "object") {
-                const rangeQuery = buildRangeQuery(value);
-                if (Object.keys(rangeQuery).length)
-                  query[valueKey] = rangeQuery;
-              } else {
-                query[valueKey] = Number(value);
-              }
-              break;
-            case "date":
-              if (typeof value === "object") {
-                const dateQuery = buildRangeQuery(value);
-                if (Object.keys(dateQuery).length) query[valueKey] = dateQuery;
-              } else {
-                query[valueKey] = new Date(value);
-              }
-              break;
-            case "checkbox":
-              query[valueKey] = Array.isArray(value) ? { $all: value } : value;
-              break;
+
+        let processedValue = fieldValue;
+        if (typeof fieldValue === "string" && fieldValue.startsWith("{")) {
+          try {
+            processedValue = JSON.parse(fieldValue);
+          } catch (e) {
+            processedValue = fieldValue;
+          }
+        }
+
+        const valueKey = `values.${fieldName}`;
+        const fieldDefinition = categoryFields.find(
+          (f) => f.name === fieldName
+        );
+        if (fieldDefinition) {
+          switch (fieldDefinition.type) {
             case "select":
-              query[valueKey] = Array.isArray(value) ? { $in: value } : value;
+              if (Array.isArray(processedValue)) {
+                query[valueKey] = { $in: processedValue };
+              } else {
+                query[valueKey] = processedValue;
+              }
               break;
+
+            case "radio":
+              query[valueKey] = processedValue;
+              break;
+
+            case "checkbox":
+              if (Array.isArray(processedValue)) {
+                query[valueKey] = { $all: processedValue };
+              } else {
+                query[valueKey] = processedValue;
+              }
+              break;
+
+            case "number":
+              if (
+                typeof processedValue === "object" &&
+                processedValue !== null
+              ) {
+                const numberQuery = {};
+                if (
+                  processedValue.min !== undefined &&
+                  processedValue.min !== ""
+                ) {
+                  numberQuery.$gte = Number(processedValue.min);
+                }
+                if (
+                  processedValue.max !== undefined &&
+                  processedValue.max !== ""
+                ) {
+                  numberQuery.$lte = Number(processedValue.max);
+                }
+                if (Object.keys(numberQuery).length > 0) {
+                  query[valueKey] = numberQuery;
+                }
+              } else {
+                const numValue = Number(processedValue);
+                if (!isNaN(numValue)) {
+                  query.$and = [
+                    ...(query.$and || []),
+                    {
+                      $or: [
+                        { [valueKey]: numValue },
+                        { [valueKey]: processedValue.toString() },
+                        { [valueKey]: String(numValue) },
+                      ],
+                    },
+                  ];
+                } else {
+                  query[valueKey] = {
+                    $regex: processedValue.toString(),
+                    $options: "i",
+                  };
+                }
+              }
+              break;
+
+            case "date":
+              if (
+                typeof processedValue === "object" &&
+                processedValue !== null
+              ) {
+                const dateQuery = {};
+                if (processedValue.start && processedValue.start !== "") {
+                  dateQuery.$gte = new Date(processedValue.start);
+                }
+                if (processedValue.end && processedValue.end !== "") {
+                  dateQuery.$lte = new Date(processedValue.end);
+                }
+                if (Object.keys(dateQuery).length > 0) {
+                  query[valueKey] = dateQuery;
+                }
+              } else {
+                try {
+                  const dateValue = new Date(processedValue);
+                  if (!isNaN(dateValue.getTime())) {
+                    query[valueKey] = dateValue;
+                  }
+                } catch (e) {}
+              }
+              break;
+
+            case "text":
+            case "input":
+              if (typeof processedValue === "string" && processedValue.trim()) {
+                query[valueKey] = {
+                  $regex: processedValue.trim(),
+                  $options: "i",
+                };
+              }
+              break;
+
             default:
-              query[valueKey] =
-                typeof value === "string"
-                  ? { $regex: value, $options: "i" }
-                  : value;
+              if (typeof processedValue === "string" && processedValue.trim()) {
+                query[valueKey] = {
+                  $regex: processedValue.trim(),
+                  $options: "i",
+                };
+              } else {
+                query[valueKey] = processedValue;
+              }
           }
         } else {
-          if (
-            typeof value === "object" &&
-            (value.min !== undefined ||
-              value.max !== undefined ||
-              value.start !== undefined ||
-              value.end !== undefined)
+          if (typeof processedValue === "object" && processedValue !== null) {
+            if (
+              processedValue.min !== undefined ||
+              processedValue.max !== undefined
+            ) {
+              const rangeQuery = {};
+              if (
+                processedValue.min !== undefined &&
+                processedValue.min !== ""
+              ) {
+                rangeQuery.$gte = Number(processedValue.min);
+              }
+              if (
+                processedValue.max !== undefined &&
+                processedValue.max !== ""
+              ) {
+                rangeQuery.$lte = Number(processedValue.max);
+              }
+              if (Object.keys(rangeQuery).length > 0) {
+                query[valueKey] = rangeQuery;
+              }
+            } else if (
+              processedValue.start !== undefined ||
+              processedValue.end !== undefined
+            ) {
+              const dateQuery = {};
+              if (processedValue.start && processedValue.start !== "") {
+                dateQuery.$gte = new Date(processedValue.start);
+              }
+              if (processedValue.end && processedValue.end !== "") {
+                dateQuery.$lte = new Date(processedValue.end);
+              }
+              if (Object.keys(dateQuery).length > 0) {
+                query[valueKey] = dateQuery;
+              }
+            } else {
+              query[valueKey] = processedValue;
+            }
+          } else if (Array.isArray(processedValue)) {
+            query[valueKey] = { $in: processedValue };
+          } else if (
+            typeof processedValue === "string" &&
+            processedValue.trim()
           ) {
-            const rangeQuery = buildRangeQuery(value);
-            if (Object.keys(rangeQuery).length) query[valueKey] = rangeQuery;
-          } else if (typeof value === "string") {
-            query[valueKey] = { $regex: value, $options: "i" };
+            const numValue = Number(processedValue);
+            if (!isNaN(numValue) && isFinite(numValue)) {
+              query.$and = [
+                ...(query.$and || []),
+                {
+                  $or: [
+                    { [valueKey]: numValue },
+                    { [valueKey]: processedValue.trim() },
+                    { [valueKey]: String(numValue) },
+                    {
+                      [valueKey]: {
+                        $regex: `^${processedValue.trim()}$`,
+                        $options: "i",
+                      },
+                    },
+                  ],
+                },
+              ];
+            } else {
+              query[valueKey] = {
+                $regex: processedValue.trim(),
+                $options: "i",
+              };
+            }
           } else {
-            query[valueKey] = value;
+            if (typeof processedValue === "number") {
+              query.$and = [
+                ...(query.$and || []),
+                {
+                  $or: [
+                    { [valueKey]: processedValue },
+                    { [valueKey]: processedValue.toString() },
+                    { [valueKey]: String(processedValue) },
+                  ],
+                },
+              ];
+            } else {
+              query[valueKey] = processedValue;
+            }
           }
         }
       });
     }
-    console.log("Final search query:", JSON.stringify(query, null, 2));
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    // Calculate total count first (needed for all sorting types)
     const total = await Listing.countDocuments(query);
 
     let sortObj = {};
     const sortParam = req.query.sort || sort;
 
-    // Handle price sorting with aggregation pipeline for proper price field handling
     if (
       sortParam === "Lowest Starting Price" ||
       sortParam === "Highest Starting Price"
     ) {
       const priceOrder = sortParam === "Lowest Starting Price" ? 1 : -1;
 
-      // Use aggregation pipeline to handle multiple price fields and null values
       const pipeline = [
         { $match: query },
         {
@@ -1957,10 +2032,8 @@ export const searchListings = async (req, res) => {
         { $limit: limitNum },
       ];
 
-      // Execute aggregation pipeline for price sorting
       const listings = await Listing.aggregate(pipeline);
 
-      // Populate the results since aggregation doesn't support populate directly
       const populatedListings = await Listing.populate(listings, [
         { path: "categoryId", select: "name slug icon" },
         { path: "storeId", select: "name slug" },
@@ -1989,12 +2062,23 @@ export const searchListings = async (req, res) => {
             childrenCount: targetCategory.childrenCount || 0,
           },
         }),
-      };
 
+        debug: {
+          appliedFilters: processedFilters,
+          queryGenerated: query,
+          categoryFields: targetCategory?.fields || [],
+          searchParams: {
+            store: storeIdentifier,
+            category: categoryIdentifier,
+            sort: sortParam,
+            page: pageNum,
+            limit: limitNum,
+          },
+        },
+      };
       return res.status(200).json(response);
     }
 
-    // Handle non-price sorting with regular sort
     switch (sortParam) {
       case "Popular":
         sortObj = { views: -1, createdAt: -1 };
@@ -2043,17 +2127,28 @@ export const searchListings = async (req, res) => {
           childrenCount: targetCategory.childrenCount || 0,
         },
       }),
+
+      debug: {
+        appliedFilters: processedFilters,
+        queryGenerated: query,
+        categoryFields: targetCategory?.fields || [],
+        searchParams: {
+          store: storeIdentifier,
+          category: categoryIdentifier,
+          sort: sortParam,
+          page: pageNum,
+          limit: limitNum,
+        },
+      },
     };
     return res.status(200).json(response);
   } catch (err) {
-    console.error("Error in searchListings:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 export const getListingsByCategorySlug = async (req, res) => {
   try {
     const { slug } = req.params;
-    console.log("Fetching listings for category slug:", slug);
     if (!slug) {
       return res.status(400).json({
         success: false,
@@ -2084,7 +2179,6 @@ export const getListingsByCategorySlug = async (req, res) => {
       data: listings,
     });
   } catch (error) {
-    console.error("Error fetching listings by category slug:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -2115,7 +2209,6 @@ export const getListingsByCity = async (req, res) => {
     const query = {};
 
     if (city && city.trim()) {
-      // Create a simple pattern that handles both spaces and hyphens
       const cityPattern = city.trim().replace(/\s+/g, "[-\\s]*");
 
       query.$or = [
@@ -2132,7 +2225,6 @@ export const getListingsByCity = async (req, res) => {
         $or: [{ categoryId }, { categoryPath: { $in: [categoryId] } }],
       };
       if (query.$or) {
-        // Combine city and category filters using $and
         query.$and = [{ $or: query.$or }, categoryQuery];
         delete query.$or;
       } else {
@@ -2163,18 +2255,6 @@ export const getListingsByCity = async (req, res) => {
       .populate("storeId", "name")
       .lean();
     const total = await Listing.countDocuments(query);
-
-    console.log(`Found ${listings.length} listings for city: "${city}"`);
-    console.log(
-      "Sample listing cities from results:",
-      listings.slice(0, 3).map((l) => ({
-        id: l._id,
-        city: l.city,
-        valuesCity: l.values?.city,
-        location: l.location,
-      }))
-    );
-
     res.status(200).json({
       success: true,
       count: listings.length,
@@ -2183,7 +2263,6 @@ export const getListingsByCity = async (req, res) => {
       data: listings,
     });
   } catch (error) {
-    console.error("Error fetching listings by city:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -2303,11 +2382,7 @@ export const getListingsByStore = async (req, res) => {
         : null,
       data: listings,
     });
-    console.log(
-      `Fetched ${listings.length} listings for store: ${storeSlugOrId}`
-    );
   } catch (error) {
-    console.error("Error fetching listings by store:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -2389,7 +2464,6 @@ export const getVehicleListings = async (req, res) => {
       ];
     }
 
-    // Handle search parameter separately
     if (search && typeof search === "string" && search.trim()) {
       const searchRegex = new RegExp(search.trim(), "i");
       query.$and = query.$and || [];
@@ -2408,7 +2482,7 @@ export const getVehicleListings = async (req, res) => {
           return;
         }
         let value = rawValue;
-        // Skip JSON parsing for search and other text-based parameters
+
         if (
           typeof value === "string" &&
           ![
@@ -2427,12 +2501,7 @@ export const getVehicleListings = async (req, res) => {
             if (typeof parsed === "object" && parsed !== null) {
               value = parsed;
             }
-          } catch (e) {
-            // Silently handle JSON parsing errors for non-JSON strings
-            console.log(
-              `JSON parsing failed for key: ${key}, Value: ${value}. Treating as string.`
-            );
-          }
+          } catch (e) {}
         }
         const valueKey = `values.${key}`;
         if (
@@ -2538,10 +2607,6 @@ export const getVehicleListings = async (req, res) => {
         }
       });
     }
-    console.log(
-      "Final vehicle listings query:",
-      JSON.stringify(query, null, 2)
-    );
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
@@ -2587,7 +2652,6 @@ export const getVehicleListings = async (req, res) => {
       data: listings,
     });
   } catch (error) {
-    console.error("Error fetching vehicle listings:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -2618,7 +2682,6 @@ export const getVehicleListingsAdvanced = async (req, res) => {
       limit = 20,
       fields,
     } = req.query;
-    console.log("Fetching advanced vehicle listings with params:", req.query);
     const vehicleStores = await Store.find(
       {
         $or: [
@@ -2762,10 +2825,6 @@ export const getVehicleListingsAdvanced = async (req, res) => {
     if (filters.length > 0) {
       query.$and = filters;
     }
-    console.log(
-      "Final advanced vehicle query:",
-      JSON.stringify(query, null, 2)
-    );
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
@@ -2858,7 +2917,6 @@ export const getVehicleListingsAdvanced = async (req, res) => {
       data: listings,
     });
   } catch (error) {
-    console.error("Error fetching advanced vehicle listings:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -2868,10 +2926,6 @@ export const getVehicleListingsAdvanced = async (req, res) => {
 export const getVehicleFilterOptions = async (req, res) => {
   try {
     const { categoryId, categorySlug } = req.query;
-    console.log("Fetching vehicle filter options with params:", {
-      categoryId,
-      categorySlug,
-    });
     const vehicleStores = await Store.find(
       {
         $or: [
@@ -3054,7 +3108,6 @@ export const getVehicleFilterOptions = async (req, res) => {
       totalListings: listings.length,
     });
   } catch (error) {
-    console.error("Error fetching vehicle filter options:", error);
     res.status(500).json({
       success: false,
       message: error.message,

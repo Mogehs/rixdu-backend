@@ -55,9 +55,7 @@ export const submitApplication = async (req, res) => {
       applicationMethod,
     });
 
-    await application.save();
-
-    // Add the job to user's applications in their profile
+    await application.save();
     await Profile.findOneAndUpdate(
       { user: applicantId },
       {
@@ -78,7 +76,6 @@ export const submitApplication = async (req, res) => {
       data: populatedApplication,
     });
   } catch (error) {
-    console.error("Submit application error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to submit application",
@@ -125,7 +122,6 @@ export const getUserApplications = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get user applications error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch applications",
@@ -143,9 +139,7 @@ export const getJobApplications = async (req, res) => {
       status,
       sortBy = "appliedAt",
       sortOrder = "desc",
-    } = req.query;
-
-    // Try to find job by ID first, then by slug if ID lookup fails
+    } = req.query;
     let job;
     if (mongoose.Types.ObjectId.isValid(jobId)) {
       job = await Listing.findById(jobId);
@@ -204,7 +198,6 @@ export const getJobApplications = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get job applications error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch job applications",
@@ -247,7 +240,6 @@ export const getApplicationById = async (req, res) => {
       data: application,
     });
   } catch (error) {
-    console.error("Get application by ID error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch application",
@@ -307,7 +299,6 @@ export const updateApplicationStatus = async (req, res) => {
       data: updatedApplication,
     });
   } catch (error) {
-    console.error("Update application status error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update application status",
@@ -343,9 +334,7 @@ export const withdrawApplication = async (req, res) => {
       });
     }
 
-    await Application.findByIdAndDelete(applicationId);
-
-    // Remove the job from user's applications in their profile
+    await Application.findByIdAndDelete(applicationId);
     await Profile.findOneAndUpdate(
       { user: req.user.id },
       {
@@ -360,7 +349,6 @@ export const withdrawApplication = async (req, res) => {
       message: "Application withdrawn successfully",
     });
   } catch (error) {
-    console.error("Withdraw application error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to withdraw application",
@@ -415,7 +403,6 @@ export const getApplicationStats = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get application stats error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch application statistics",

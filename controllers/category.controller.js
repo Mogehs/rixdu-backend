@@ -10,9 +10,7 @@ import {
 
 const invalidateCategoryCache = async (storeId = null, categoryId = null) => {
   try {
-    const keysToDelete = [];
-
-    // Generic category cache patterns
+    const keysToDelete = [];
     keysToDelete.push("categories:*");
     keysToDelete.push("category:*");
     keysToDelete.push("category_tree:*");
@@ -27,17 +25,14 @@ const invalidateCategoryCache = async (storeId = null, categoryId = null) => {
 
     if (categoryId) {
       keysToDelete.push(`category:${categoryId}`);
-    }
-
-    // Get all matching keys and delete them
+    }
     for (const pattern of keysToDelete) {
       const keys = await redis.keys(pattern);
       if (keys.length > 0) {
         await redis.del(...keys);
       }
     }
-  } catch (error) {
-    console.warn("Category cache invalidation error:", error.message);
+  } catch (e) {
   }
 };
 
@@ -115,7 +110,6 @@ export const createCategory = async (req, res) => {
       data: newCategory,
     });
   } catch (error) {
-    console.error("createCategory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error creating category. Please try again.",
@@ -126,9 +120,7 @@ export const createCategory = async (req, res) => {
 export const getCategories = async (req, res) => {
   try {
     const { storeId, parent, page = 1, limit = 50 } = req.query;
-    const skip = (page - 1) * limit;
-
-    // Generate cache key based on query parameters
+    const skip = (page - 1) * limit;
     const cacheKey = `categories:store:${storeId || "all"}:parent:${
       parent || "null"
     }:page:${page}:limit:${limit}`;
@@ -154,11 +146,9 @@ export const getCategories = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    const filter = {};
+    } catch (e) {
+  }
+const filter = {};
     const normalizedParent = parent === "null" || parent === "" ? null : parent;
 
     let actualStoreId = null;
@@ -229,15 +219,12 @@ export const getCategories = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 600, responseString); // 10 minutes cache
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     res.status(200).json(responseData);
   } catch (error) {
-    console.error("Fetch error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching categories. Please try again.",
@@ -273,11 +260,9 @@ export const getCategory = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    let category;
+    } catch (e) {
+  }
+let category;
     let filter = {};
 
     if (mongoose.Types.ObjectId.isValid(identifier)) {
@@ -321,15 +306,12 @@ export const getCategory = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 1200, responseString); // 20 minutes cache
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     res.status(200).json(responseData);
   } catch (error) {
-    console.error("getCategory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching category. Please try again.",
@@ -389,7 +371,6 @@ export const updateCategory = async (req, res) => {
           });
         }
       } catch (uploadError) {
-        console.error("Icon upload error:", uploadError);
         return res.status(400).json({
           success: false,
           message: "Error updating category icon",
@@ -424,7 +405,6 @@ export const updateCategory = async (req, res) => {
       data: updatedCategory,
     });
   } catch (error) {
-    console.error("updateCategory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error updating category. Please try again.",
@@ -436,8 +416,7 @@ export const deleteCategory = async (req, res) => {
   try {
     const { identifier } = req.params;
 
-    let category;
-    // Check if identifier is a valid ObjectId or treat as slug
+    let category;
     if (mongoose.Types.ObjectId.isValid(identifier)) {
       category = await Category.findById(identifier);
     } else {
@@ -518,11 +497,9 @@ export const getCategoryTree = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    const categories = await Category.getFullHierarchy(storeId);
+    } catch (e) {
+  }
+const categories = await Category.getFullHierarchy(storeId);
 
     const buildTree = (parentId = null) => {
       return categories
@@ -563,15 +540,12 @@ export const getCategoryTree = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 1800, responseString); // 30 minutes cache
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     res.status(200).json(responseData);
   } catch (error) {
-    console.error("getCategoryTree error:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching category tree: " + error.message,
@@ -582,13 +556,10 @@ export const getCategoryTree = async (req, res) => {
 export const getCategoryPath = async (req, res) => {
   try {
     const { identifier } = req.params;
-    let category;
-
-    // Check if identifier is a valid ObjectId or treat as slug/name
+    let category;
     if (mongoose.Types.ObjectId.isValid(identifier)) {
       category = await Category.findById(identifier);
-    } else {
-      // Try to find by slug first, then by name
+    } else {
       category = await Category.findOne({ slug: identifier });
       if (!category) {
         category = await Category.findOne({ name: identifier });
@@ -604,9 +575,7 @@ export const getCategoryPath = async (req, res) => {
 
     const path = [];
     let current = category;
-    let rootCategory = current;
-
-    // Build the path from current category to root
+    let rootCategory = current;
     path.unshift({
       _id: current._id,
       name: current.name,
@@ -637,7 +606,6 @@ export const getCategoryPath = async (req, res) => {
       data: path,
     });
   } catch (error) {
-    console.error("getCategoryPath error:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -689,9 +657,7 @@ export const getCategoryBySlug = async (req, res) => {
         success: false,
         message: "Category not found",
       });
-    }
-
-    // Get children if category has any
+    }
     if (category.children && category.children.length > 0) {
       const children = await Category.findChildren(
         category._id,
@@ -705,7 +671,6 @@ export const getCategoryBySlug = async (req, res) => {
       data: category,
     });
   } catch (error) {
-    console.error("getCategoryBySlug error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching category by slug. Please try again.",
@@ -725,9 +690,7 @@ export const searchCategories = async (req, res) => {
       parent,
     } = req.query;
 
-    const skip = (page - 1) * limit;
-
-    // Generate cache key based on all query parameters
+    const skip = (page - 1) * limit;
     const cacheKey = `category_search:q:${q || "none"}:store:${
       storeSlug || "all"
     }:leaf:${isLeaf || "any"}:level:${level || "any"}:parent:${
@@ -755,11 +718,9 @@ export const searchCategories = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    const filter = {};
+    } catch (e) {
+  }
+const filter = {};
 
     if (storeSlug) {
       const store = await Store.findOne({ slug: storeSlug }).select("_id");
@@ -823,15 +784,12 @@ export const searchCategories = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 300, responseString); // 5 minutes cache for search results
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     res.status(200).json(responseData);
   } catch (error) {
-    console.error("searchCategories error:", error);
     res.status(500).json({
       success: false,
       message: "Server error searching categories. Please try again.",
@@ -891,18 +849,13 @@ export const getCategoryChildren = async (req, res) => {
       data: children,
     });
   } catch (error) {
-    console.error("getCategoryChildren error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching category children. Please try again.",
     });
   }
-};
-
-// Helper function to find all leaf categories that are descendants of a parent category
-// If parentId is null, returns all leaf categories in the store
-const findAllLeafChildren = async (parentId, storeId) => {
-  // If parentId is null, return all leaf categories in the store
+};
+const findAllLeafChildren = async (parentId, storeId) => {
   if (parentId === null || parentId === undefined) {
     return await Category.find({
       storeId: storeId,
@@ -910,34 +863,25 @@ const findAllLeafChildren = async (parentId, storeId) => {
     });
   }
 
-  const allDescendants = [];
-
-  // Recursive function to get all descendants
+  const allDescendants = [];
   const getDescendants = async (categoryId) => {
     const children = await Category.find({ parent: categoryId, storeId });
 
     for (const child of children) {
-      allDescendants.push(child);
-      // Recursively get children of this child
+      allDescendants.push(child);
       await getDescendants(child._id);
     }
   };
 
-  await getDescendants(parentId);
-
-  // Filter only leaf categories
+  await getDescendants(parentId);
   return allDescendants.filter((category) => category.isLeaf);
-};
-
-// Helper function to find all leaf categories in a store
+};
 const findAllLeafCategoriesInStore = async (storeId) => {
   return await Category.find({
     storeId: storeId,
     isLeaf: true,
   });
-};
-
-// Helper function to recursively collect all leaf category fields
+};
 const collectLeafCategoryFields = async (categoryId, storeId) => {
   const fieldsMap = new Map();
 
@@ -946,43 +890,122 @@ const collectLeafCategoryFields = async (categoryId, storeId) => {
 
     if (!category) return;
 
-    if (category.isLeaf && category.fields && category.fields.length > 0) {
-      // Process fields from leaf category
-      category.fields.forEach((field) => {
-        if (!fieldsMap.has(field.name)) {
-          fieldsMap.set(field.name, {
-            name: field.name,
-            type: field.type,
-            options: field.options || [],
-            required: field.required || false,
-            accept: field.accept,
-            multiple: field.multiple || false,
-            maxSize: field.maxSize,
-            maxFiles: field.maxFiles,
-            minFiles: field.minFiles,
-            categories: [],
-          });
-        }
+    if (category.isLeaf && category.fields && category.fields.length > 0) {
+      const excludedFields = [
+        "phone number",
+        "phonenumber",
+        "phone_number",
+        "phone-number",
+        "mobile",
+        "mobile number",
+        "mobile_number",
+        "cell",
+        "telephone",
+        "title",
+        "description",
+        "phone",
+        "email",
+        "address",
+        "details",
+        "images",
+        "image",
+        "photos",
+        "video",
+        "videos",
+        "contact",
+        "contactnumber",
+        "contact_number",
+        "whatsapp",
+        "telegram",
+        "instagram",
+        "facebook",
+        "twitter",
+        "linkedin",
+        "website",
+        "url",
+        "link",
+        "links",
+      ];
 
-        // Add category info to the field
-        fieldsMap.get(field.name).categories.push({
-          _id: category._id,
-          name: category.name,
-          slug: category.slug,
+      const includedFields = [
+        "brand",
+        "model",
+        "color",
+        "size",
+        "material",
+        "type",
+        "category",
+        "subcategory",
+        "price",
+        "condition",
+        "age",
+        "gender",
+        "location",
+        "city",
+        "area",
+        "region",
+        "year",
+        "make",
+        "fuel",
+        "transmission",
+        "mileage",
+        "rooms",
+        "bedrooms",
+        "bathrooms",
+        "area_size",
+        "floor",
+        "parking",
+        "furnished",
+        "availability",
+        "duration",
+        "experience",
+        "education",
+        "skills",
+        "salary",
+        "job_type",
+        "company_size",
+        "industry",
+      ];
+      category.fields
+        .filter((field) => {
+          const fieldName = field.name.toLowerCase();
+          return (
+            includedFields.includes(fieldName) ||
+            (!excludedFields.includes(fieldName) &&
+              ["select", "radio", "checkbox", "number", "date"].includes(
+                field.type
+              ))
+          );
+        })
+        .forEach((field) => {
+          if (!fieldsMap.has(field.name)) {
+            fieldsMap.set(field.name, {
+              name: field.name,
+              type: field.type,
+              options: field.options || [],
+              required: field.required || false,
+              accept: field.accept,
+              multiple: field.multiple || false,
+              maxSize: field.maxSize,
+              maxFiles: field.maxFiles,
+              minFiles: field.minFiles,
+              categories: [],
+            });
+          }
+          fieldsMap.get(field.name).categories.push({
+            _id: category._id,
+            name: category.name,
+            slug: category.slug,
+          });
+          if (field.options && field.options.length > 0) {
+            const existingField = fieldsMap.get(field.name);
+            const allOptions = [
+              ...new Set([...existingField.options, ...field.options]),
+            ];
+            existingField.options = allOptions;
+          }
         });
-
-        // Merge options if they exist
-        if (field.options && field.options.length > 0) {
-          const existingField = fieldsMap.get(field.name);
-          const allOptions = [
-            ...new Set([...existingField.options, ...field.options]),
-          ];
-          existingField.options = allOptions;
-        }
-      });
-    }
-
-    // Process children
+    }
     if (category.children && category.children.length > 0) {
       for (const childId of category.children) {
         await processCategory(childId);
@@ -992,14 +1015,17 @@ const collectLeafCategoryFields = async (categoryId, storeId) => {
 
   await processCategory(categoryId);
   return Array.from(fieldsMap.values());
-};
-
-// API to get dynamic filter fields from category hierarchy
+};
 export const getDynamicFilterFields = async (req, res) => {
   try {
-    const { categorySlug, storeSlug } = req.params;
+    const { storeSlug, categorySlug } = req.params;
 
-    // Generate cache key
+    if (!categorySlug) {
+      return res.status(400).json({
+        success: false,
+        message: "Category slug is required",
+      });
+    }
     const cacheKey = `dynamic_filters:store:${storeSlug}:category:${categorySlug}`;
 
     let responseData;
@@ -1023,20 +1049,15 @@ export const getDynamicFilterFields = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    // Find store by slug
-    const store = await Store.findOne({ slug: storeSlug }).lean();
+    } catch (e) {
+  }
+const store = await Store.findOne({ slug: storeSlug }).lean();
     if (!store) {
       return res.status(404).json({
         success: false,
         message: "Store not found",
       });
     }
-
-    // Find category by slug within the store
     const category = await Category.findOne({
       slug: categorySlug,
       storeId: store._id,
@@ -1046,19 +1067,100 @@ export const getDynamicFilterFields = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "Category not found in the specified store",
+        searchedSlug: categorySlug,
+        storeSlug: storeSlug,
       });
     }
-
     let allFields = [];
+    const excludedFields = [
+      "phone number",
+      "phonenumber",
+      "phone_number",
+      "phone-number",
+      "mobile",
+      "mobile number",
+      "mobile_number",
+      "cell",
+      "telephone",
+      "title",
 
-    // Common fields to exclude from filters (these are typically displayed in listings)
-    const excludedFields = ["title", "description"];
+      "phone",
+      "email",
+      "address",
+      "details",
+      "images",
+      "image",
+      "photos",
+      "video",
+      "videos",
+      "contact",
+      "contactnumber",
+      "contact_number",
+      "whatsapp",
+      "telegram",
+      "instagram",
+      "facebook",
+      "twitter",
+      "linkedin",
+      "website",
+      "url",
+      "link",
+      "links",
+      "extras",
+    ];
+    const includedFields = [
+      "brand",
+      "model",
+      "color",
+      "size",
+      "material",
+      "type",
+      "category",
+      "subcategory",
+      "price",
+      "condition",
+      "age",
+      "gender",
+      "location",
+      "city",
+      "area",
+      "region",
+      "year",
+      "make",
+      "fuel",
+      "transmission",
+      "mileage",
+      "rooms",
+      "bedrooms",
+      "bathrooms",
+      "area_size",
+      "floor",
+      "parking",
+      "furnished",
+      "availability",
+      "duration",
+      "experience",
+      "education",
+      "skills",
+      "salary",
+      "job_type",
+      "company_size",
+      "industry",
+    ];
 
-    if (category.isLeaf) {
-      // If it's a leaf category, get its fields
+    if (category.isLeaf) {
       if (category.fields && category.fields.length > 0) {
         allFields = category.fields
-          .filter((field) => !excludedFields.includes(field.name.toLowerCase()))
+          .filter((field) => {
+            const fieldName = field.name.toLowerCase();
+            return (
+              includedFields.includes(fieldName) ||
+              (!excludedFields.includes(fieldName) &&
+                ["select", "radio", "checkbox", "number", "date"].includes(
+                  field.type
+                ))
+            );
+          })
           .map((field) => ({
             name: field.name,
             type: field.type,
@@ -1078,78 +1180,47 @@ export const getDynamicFilterFields = async (req, res) => {
             ],
           }));
       }
-    } else {
-      // If it has children, traverse and collect all leaf category fields
-      allFields = await collectLeafCategoryFields(category._id, store._id);
-
-      // Filter out excluded fields
-      allFields = allFields.filter(
-        (field) => !excludedFields.includes(field.name.toLowerCase())
-      );
-    }
-
-    // Process fields for dynamic filter generation
+    } else {
+      allFields = await collectLeafCategoryFields(category._id, store._id);
+      allFields = allFields.filter((field) => {
+        const fieldName = field.name.toLowerCase();
+        return (
+          includedFields.includes(fieldName) ||
+          (!excludedFields.includes(fieldName) &&
+            ["select", "radio", "checkbox", "number", "date"].includes(
+              field.type
+            ))
+        );
+      });
+    }
     const filterableFields = allFields.map((field) => {
-      const filterField = {
+      return {
         name: field.name,
         type: field.type,
-        filterType: getFilterType(field.type),
-        options: field.options || [],
+        options: field.options || [], // Only include options for select/radio fields
         multiple: field.multiple || false,
-        categories: field.categories || [],
       };
-
-      // Add specific properties based on field type
-      if (field.type === "select" || field.type === "radio") {
-        filterField.hasOptions = true;
-      }
-
-      if (field.type === "number") {
-        filterField.supportsRange = true;
-      }
-
-      if (field.type === "date") {
-        filterField.supportsDateRange = true;
-      }
-
-      return filterField;
+    });
+    const searchableFields = filterableFields.filter((field) => {
+      return [
+        "select",
+        "radio",
+        "checkbox",
+        "number",
+        "date",
+        "text",
+        "input",
+      ].includes(field.type);
     });
-
-    // Group fields by type for better organization
-    const groupedFields = {
-      select: filterableFields.filter(
-        (f) => f.type === "select" || f.type === "radio"
-      ),
-      range: filterableFields.filter((f) => f.type === "number"),
-      date: filterableFields.filter((f) => f.type === "date"),
-      checkbox: filterableFields.filter((f) => f.type === "checkbox"),
-      text: filterableFields.filter(
-        (f) => f.type === "text" || f.type === "input"
-      ),
-    };
-
     responseData = {
       success: true,
-      store: {
-        _id: store._id,
-        name: store.name,
-        slug: store.slug,
-      },
       category: {
         _id: category._id,
         name: category.name,
         slug: category.slug,
         isLeaf: category.isLeaf,
-        level: category.level,
       },
-      data: {
-        fields: filterableFields,
-        groupedFields,
-        totalFields: filterableFields.length,
-        fieldTypes: Object.keys(groupedFields).filter(
-          (key) => groupedFields[key].length > 0
-        ),
-      },
+      data: searchableFields,
     };
 
     const responseString = JSON.stringify(responseData);
@@ -1161,23 +1232,18 @@ export const getDynamicFilterFields = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 1800, responseString); // 30 minutes cache
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     res.status(200).json(responseData);
   } catch (error) {
-    console.error("getDynamicFilterFields error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching dynamic filter fields. Please try again.",
     });
   }
-};
-
-// Helper function to determine filter type based on field type
+};
 const getFilterType = (fieldType) => {
   const filterTypeMap = {
     select: "dropdown",
@@ -1190,32 +1256,23 @@ const getFilterType = (fieldType) => {
   };
 
   return filterTypeMap[fieldType] || "search";
-};
-
-// API to update fields for all leaf children of a parent category OR all leaf categories in a store
+};
 export const updateFieldsForAllLeafChildren = async (req, res) => {
   try {
     const { categoryId } = req.params;
     const { fields } = req.body;
-    console.log(categoryId, fields);
-
-    // Validate categoryId
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid ID format",
       });
-    }
-
-    // Validate fields
+    }
     if (!fields || !Array.isArray(fields)) {
       return res.status(400).json({
         success: false,
         message: "Fields must be provided as an array",
       });
-    }
-
-    // First, try to find as a category
+    }
     let parentCategory = await Category.findById(categoryId);
     let store = null;
     let leafChildren = [];
@@ -1223,24 +1280,19 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
     let entityName = "";
     let storeId = null;
 
-    if (parentCategory) {
-      // It's a category ID
+    if (parentCategory) {
       entityType = "category";
       entityName = parentCategory.name;
-      storeId = parentCategory.storeId;
-
-      // If this category itself is a leaf, include it and its descendants
+      storeId = parentCategory.storeId;
       if (parentCategory.isLeaf) {
         leafChildren = [parentCategory];
-      } else {
-        // Find all leaf children of this category
+      } else {
         leafChildren = await findAllLeafChildren(
           categoryId,
           parentCategory.storeId
         );
       }
-    } else {
-      // Try to find as a store
+    } else {
       store = await Store.findById(categoryId);
 
       if (!store) {
@@ -1248,14 +1300,10 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
           success: false,
           message: "Neither category nor store found with the provided ID",
         });
-      }
-
-      // It's a store ID - find all leaf categories in this store
+      }
       entityType = "store";
       entityName = store.name;
-      storeId = store._id;
-
-      // Find all leaf categories in this store (including top-level ones with no parent)
+      storeId = store._id;
       leafChildren = await findAllLeafCategoriesInStore(store._id);
     }
 
@@ -1268,9 +1316,7 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
         entityType,
         entityName,
       });
-    }
-
-    // Update fields for all leaf children
+    }
     const updatePromises = leafChildren.map(async (leafCategory) => {
       leafCategory.fields = fields;
       await leafCategory.save();
@@ -1281,9 +1327,7 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
       };
     });
 
-    const updatedCategories = await Promise.all(updatePromises);
-
-    // Invalidate cache for affected categories
+    const updatedCategories = await Promise.all(updatePromises);
     await invalidateCategoryCache(storeId);
 
     res.status(200).json({
@@ -1307,7 +1351,6 @@ export const updateFieldsForAllLeafChildren = async (req, res) => {
             },
     });
   } catch (error) {
-    console.error("updateFieldsForAllLeafChildren error:", error);
     res.status(500).json({
       success: false,
       message:

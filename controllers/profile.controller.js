@@ -4,9 +4,7 @@ import {
   uploadUserAvatar,
   uploadUserResume,
   deleteResourceFromCloudinary,
-} from "../utils/cloudinaryUpload.js";
-
-// Get complete profile
+} from "../utils/cloudinaryUpload.js";
 export const getCompleteProfile = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
@@ -25,15 +23,12 @@ export const getCompleteProfile = async (req, res) => {
       data: profile,
     });
   } catch (error) {
-    console.error(`Error fetching profile: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching profile. Please try again.",
     });
   }
-};
-
-// Get public profile
+};
 export const getPublicProfile = async (req, res) => {
   try {
     const userId = req.params.userId;
@@ -52,23 +47,10 @@ export const getPublicProfile = async (req, res) => {
         success: false,
         message: "Public profile not found",
       });
-    }
-
-    // Check if this is user's own profile
+    }
     const requestingUserId = req.user?.id;
 
     const isOwnProfile = requestingUserId && requestingUserId === userId;
-
-    // Debug logging
-    console.log("🔍 Backend getPublicProfile Debug:", {
-      requestingUserId,
-      profileUserId: userId,
-      isOwnProfile,
-      hasReqUser: !!req.user,
-      userIdComparison: `${requestingUserId} === ${userId}`,
-    });
-
-    // Add isOwnProfile flag to the response
     const responseData = {
       ...profile,
       isOwnProfile,
@@ -79,15 +61,12 @@ export const getPublicProfile = async (req, res) => {
       data: responseData,
     });
   } catch (error) {
-    console.error(`Error fetching public profile: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching public profile. Please try again.",
     });
   }
-};
-
-// Get job profile
+};
 export const getJobProfile = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
@@ -106,15 +85,12 @@ export const getJobProfile = async (req, res) => {
       data: profile,
     });
   } catch (error) {
-    console.error(`Error fetching job profile: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching job profile. Please try again.",
     });
   }
-};
-
-// Get professional profile
+};
 export const getProfessionalProfile = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
@@ -133,19 +109,15 @@ export const getProfessionalProfile = async (req, res) => {
       data: profile,
     });
   } catch (error) {
-    console.error(`Error fetching professional profile: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching professional profile. Please try again.",
     });
   }
-};
-
-// Update personal profile
+};
 export const updatePersonalProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log("COMPLETE REQUEST BODY:", req.body);
     const {
       profileEmail,
       profilePhoneNumber,
@@ -156,14 +128,6 @@ export const updatePersonalProfile = async (req, res) => {
       location,
       visaStatus,
     } = req.body;
-
-    console.log("Request body in updatePersonalProfile:", {
-      fullBody: req.body,
-      hasVisaStatus: req.body.visaStatus !== undefined,
-      visaStatus: req.body.visaStatus,
-      languages: req.body.languages,
-    });
-
     let profile = await Profile.findOne({ user: userId });
 
     if (!profile) {
@@ -189,19 +153,10 @@ export const updatePersonalProfile = async (req, res) => {
         profile.personal.avatar = avatarResult.url;
         profile.personal.avatar_public_id = avatarResult.public_id;
       }
-    }
-
-    // Update profile email and phone number
-    if (profileEmail !== undefined) {
-      // Validate email format if provided and not empty
+    }
+    if (profileEmail !== undefined) {
       if (profileEmail && profileEmail.trim() !== "") {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        console.log("Validating email:", {
-          value: profileEmail,
-          isValid: emailRegex.test(profileEmail),
-        });
-
         if (!emailRegex.test(profileEmail)) {
           return res.status(400).json({
             success: false,
@@ -212,18 +167,10 @@ export const updatePersonalProfile = async (req, res) => {
       profile.personal.profileEmail = profileEmail;
     }
 
-    if (profilePhoneNumber !== undefined) {
-      // Validate phone number format if provided and not empty
+    if (profilePhoneNumber !== undefined) {
       if (profilePhoneNumber && profilePhoneNumber.trim() !== "") {
         const phoneRegex = /^[+]?[\d\s()\-]{7,20}$/;
         const cleanedNumber = profilePhoneNumber.replace(/[\s\-()]/g, "");
-
-        console.log("Validating phone number:", {
-          original: profilePhoneNumber,
-          cleaned: cleanedNumber,
-          isValid: phoneRegex.test(profilePhoneNumber),
-        });
-
         if (!phoneRegex.test(profilePhoneNumber)) {
           return res.status(400).json({
             success: false,
@@ -236,54 +183,34 @@ export const updatePersonalProfile = async (req, res) => {
 
     if (bio !== undefined) profile.personal.bio = bio;
     if (dateOfBirth) {
-      try {
-        // Check if the date is valid before setting
+      try {
         const parsedDate = new Date(dateOfBirth);
         if (!isNaN(parsedDate.getTime())) {
           profile.personal.dateOfBirth = parsedDate;
-          console.log("Valid date parsed:", {
-            original: dateOfBirth,
-            parsed: parsedDate,
-          });
         } else {
-          console.warn("Invalid date format ignored:", dateOfBirth);
         }
-      } catch (dateError) {
-        console.error("Date parsing error:", dateError.message);
-      }
-    }
+      } catch (e) {
+  }
+}
     if (gender) profile.personal.gender = gender;
 
-    try {
-      // Initialize as empty array
+    try {
       profile.personal.languages = [];
 
-      if (languages) {
-        // Check if languages is a JSON string
+      if (languages) {
         if (typeof languages === "string" && languages.startsWith("[")) {
-          try {
-            // Try to parse as JSON
+          try {
             const parsedLangs = JSON.parse(languages);
             if (Array.isArray(parsedLangs)) {
               profile.personal.languages = parsedLangs.filter(
                 (lang) => typeof lang === "string" && lang.trim() !== ""
               );
-              console.log(
-                "Languages parsed from JSON:",
-                profile.personal.languages
-              );
             }
-          } catch (jsonError) {
-            console.error("JSON parse error for languages:", jsonError.message);
-            // Fall through to the next handling approach
-          }
-        }
-
-        // If not processed as JSON (or parsing failed), handle as before
-        if (profile.personal.languages.length === 0) {
-          // Convert string to array if it's a single string
-          if (typeof languages === "string" && languages.trim() !== "") {
-            // Split by comma if it contains commas
+          } catch (e) {
+  }
+}
+        if (profile.personal.languages.length === 0) {
+          if (typeof languages === "string" && languages.trim() !== "") {
             if (languages.includes(",")) {
               profile.personal.languages = languages
                 .split(",")
@@ -292,48 +219,22 @@ export const updatePersonalProfile = async (req, res) => {
             } else {
               profile.personal.languages = [languages.trim()];
             }
-          }
-          // Handle array of languages
-          else if (Array.isArray(languages)) {
-            // Filter out empty strings
+          }
+          else if (Array.isArray(languages)) {
             profile.personal.languages = languages.filter(
               (lang) => typeof lang === "string" && lang.trim() !== ""
             );
           }
         }
       }
-
-      console.log("Languages processed:", profile.personal.languages);
     } catch (langError) {
-      console.error("Error processing languages:", langError);
-      // Default to empty array on error
       profile.personal.languages = [];
-    }
-
-    // Handle visa status
-    // Access visa status directly from req.body to avoid destructuring issues
+    }
     const rawVisaStatus = req.body.visaStatus;
-    console.log("Handling visa status:", {
-      visaStatus,
-      rawVisaStatus: rawVisaStatus,
-      typeFromDestructured: typeof visaStatus,
-      typeFromRawBody: typeof rawVisaStatus,
-      hasVisaStatusInBody: "visaStatus" in req.body,
-      bodyKeys: Object.keys(req.body),
-      fullBody: req.body,
-      contentType: req.headers["content-type"],
-    });
-
-    // CRITICAL FIX: Always set visa status, even if not in body
     if ("visaStatus" in req.body) {
       profile.personal.visaStatus = rawVisaStatus;
-      console.log("Setting visa status from request body:", rawVisaStatus);
-    } else {
-      // If not in body, set to empty string to ensure it's included in the profile
+    } else {
       profile.personal.visaStatus = "";
-      console.log(
-        "Visa status not found in request body, setting to empty string"
-      );
     }
 
     if (location) {
@@ -343,77 +244,40 @@ export const updatePersonalProfile = async (req, res) => {
       };
     }
 
-    await profile.save();
-
-    // Sync avatar to User model if it was updated
+    await profile.save();
     if (req.file && profile.personal.avatar) {
       const User = mongoose.model("User");
       await User.findByIdAndUpdate(userId, {
         avatar: profile.personal.avatar,
         avatar_public_id: profile.personal.avatar_public_id,
       });
-      console.log(`Avatar synced to User model for user: ${userId}`);
     }
-
-    console.log("Profile personal data to be returned:", {
-      hasVisaStatus: !!profile.personal.visaStatus,
-      visaStatus: profile.personal.visaStatus,
-      languages: profile.personal.languages,
-      fullPersonalKeys: Object.keys(profile.personal),
-    });
-
-    // Use toObject to get a clean JavaScript object without mongoose methods
     const personalObject = profile.personal.toObject
       ? profile.personal.toObject()
-      : { ...profile.personal };
-
-    // Create a response object that explicitly includes all fields
+      : { ...profile.personal };
     const responseData = {
-      ...personalObject,
-      // Force include visa status, even if empty or undefined
+      ...personalObject,
       visaStatus:
         profile.personal.visaStatus !== undefined
           ? profile.personal.visaStatus
-          : "",
-      // Force include languages as array if undefined
+          : "",
       languages: Array.isArray(profile.personal.languages)
         ? profile.personal.languages
         : [],
-    };
-
-    // Double check that visa status is included
+    };
     if (!("visaStatus" in responseData)) {
       responseData.visaStatus = "";
-      console.log("Manually adding missing visaStatus field to response");
     }
-
-    console.log("Final response data:", {
-      hasVisaStatus: "visaStatus" in responseData,
-      visaStatus: responseData.visaStatus,
-      visaStatusType: typeof responseData.visaStatus,
-      allKeys: Object.keys(responseData),
-    });
-
     return res.status(200).json({
       success: true,
       data: responseData,
     });
   } catch (error) {
-    console.error(`Error updating personal profile: ${error.message}`);
-    console.error(`Error stack: ${error.stack}`);
-    console.error(`Error updating with request body:`, req.body);
-
-    // Log specific fields to diagnose issues
     if (req.body.dateOfBirth) {
       try {
-        console.log("Date conversion test:", {
-          original: req.body.dateOfBirth,
-          parsed: new Date(req.body.dateOfBirth),
-        });
-      } catch (dateError) {
-        console.error("Date parsing error:", dateError.message);
-      }
-    }
+      } catch (e) {
+  }
+}
 
     return res.status(500).json({
       success: false,
@@ -426,7 +290,6 @@ export const updatePersonalProfile = async (req, res) => {
 export const updateJobProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log("COMPLETE REQUEST BODY:", req.body);
     const {
       qualifications,
       experience,
@@ -499,7 +362,6 @@ export const updateJobProfile = async (req, res) => {
       data: profile.jobProfile,
     });
   } catch (error) {
-    console.error(`Error updating job profile: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error updating job profile. Please try again.",
@@ -551,15 +413,12 @@ export const uploadResume = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(`Error uploading resume: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error uploading resume. Please try again.",
     });
   }
-};
-
-// Add to favorites
+};
 export const addToFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -616,19 +475,15 @@ export const addToFavorites = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error(`Error adding to favorites: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error adding to favorites. Please try again.",
     });
   }
-};
-
-// Remove from favorites
+};
 export const removeFromFavorites = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log("COMPLETE REQUEST BODY:", req.body);
     const { listingId } = req.params;
 
     const profile = await Profile.findOne({ user: userId });
@@ -638,9 +493,7 @@ export const removeFromFavorites = async (req, res) => {
         success: false,
         message: "Profile not found",
       });
-    }
-
-    // Remove listing from favorites
+    }
     profile.favorites.listings = profile.favorites.listings.filter(
       (listing) => listing.toString() !== listingId
     );
@@ -652,21 +505,15 @@ export const removeFromFavorites = async (req, res) => {
       message: "Removed from favorites successfully",
     });
   } catch (error) {
-    console.error(`Error removing from favorites: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error removing from favorites. Please try again.",
     });
   }
-};
-
-// Get user favorites
+};
 export const getUserFavorites = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
-    console.log("Fetching favorites for user:", userId);
-
-    // Validate that userId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
@@ -689,18 +536,14 @@ export const getUserFavorites = async (req, res) => {
       data: profile.favorites.listings,
     });
   } catch (error) {
-    console.error(`Error fetching user favorites: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching favorites. Please try again.",
     });
   }
-};
-
-// Search users by skills
+};
 export const searchUsersBySkills = async (req, res) => {
   try {
-    console.log("COMPLETE REQUEST BODY:", req.body);
     const { skills, limit } = req.query;
 
     if (!skills) {
@@ -723,15 +566,12 @@ export const searchUsersBySkills = async (req, res) => {
       data: profiles,
     });
   } catch (error) {
-    console.error(`Error searching users by skills: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error searching users. Please try again.",
     });
   }
-};
-
-// Create a new profile
+};
 export const createProfile = async (userId) => {
   try {
     const existingProfile = await Profile.findOne({ user: userId });
@@ -745,16 +585,11 @@ export const createProfile = async (userId) => {
       jobProfile: {},
       favorites: { listings: [] },
     });
-
-    console.log(`Profile created for user: ${userId}`);
     return profile;
   } catch (error) {
-    console.error(`Error creating profile: ${error.message}`);
     throw new Error("Failed to create profile");
   }
-};
-
-// Utility function to sync all existing profiles' avatars to users
+};
 export const syncAllAvatarsToUsers = async () => {
   try {
     const User = mongoose.model("User");
@@ -774,14 +609,10 @@ export const syncAllAvatarsToUsers = async () => {
           avatar: profile.personal.avatar,
           avatar_public_id: profile.personal.avatar_public_id,
         });
-        console.log(`Synced avatar for user: ${profile.user}`);
       }
     }
-
-    console.log("Avatar sync completed successfully");
     return { success: true, synced: profiles.length };
   } catch (error) {
-    console.error(`Error syncing avatars: ${error.message}`);
     throw new Error("Failed to sync avatars");
   }
 };

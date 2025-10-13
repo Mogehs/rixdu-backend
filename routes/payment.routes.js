@@ -5,6 +5,8 @@ import {
   handleStripeWebhook,
   getPaymentHistory,
   refundPayment,
+  createVerificationPaymentIntent,
+  confirmVerificationPayment,
 } from "../controllers/payment.controller.js";
 
 import { protect, authorize } from "../middleware/auth.middleware.js";
@@ -32,6 +34,13 @@ router
     processFileUploads,
     confirmPayment
   );
+
+// Verification payment routes
+router
+  .route("/verification/create-intent")
+  .post(createVerificationPaymentIntent);
+router.route("/verification/confirm").post(confirmVerificationPayment);
+
 router.route("/history").get(getPaymentHistory);
 
 // Admin routes

@@ -125,6 +125,19 @@ const UserSchema = new mongoose.Schema(
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
+      // Payment fields for verification
+      paymentStatus: {
+        type: String,
+        enum: ["unpaid", "paid", "refunded"],
+        default: "unpaid",
+      },
+      paymentIntentId: String,
+      paymentAmount: Number,
+      paymentCurrency: {
+        type: String,
+        default: "AED",
+      },
+      paymentDate: Date,
     },
   },
   {
@@ -224,7 +237,71 @@ UserSchema.methods.isDocumentVerified = function () {
 };
 
 UserSchema.methods.canSubmitVerification = function () {
-  return ["unverified", "rejected"].includes(this.documentVerification.status);
+  const validStatuses = ["unverified", "rejected"];
+  const hasValidStatus = validStatuses.includes(
+    this.documentVerification.status
+  );
+  const hasPaid = this.documentVerification.paymentStatus === "paid";
+
+  // For unverified users, they need to pay first
+  if (this.documentVerification.status === "unverified") {
+    return hasPaid;
+  }
+
+  // For rejected users, they can resubmit if they have paid
+  if (this.documentVerification.status === "rejected") {
+    return hasPaid;
+  }
+
+  return false;
+};
+
+// Subscription helper methods
+UserSchema.methods.getActiveSubscription = async function () {
+  const Subscription = mongoose.model("Subscription");
+  return await Subscription.findActiveSubscription(this._id);
+};
+
+UserSchema.methods.hasActiveSubscription = async function () {
+  const subscription = await this.getActiveSubscription();
+  return !!subscription;
+};
+
+UserSchema.methods.canCreateListing = async function () {
+  const Subscription = mongoose.model("Subscription");
+  return await Subscription.canCreateListing(this._id);
+};
+
+UserSchema.methods.hasUsedFreeTrial = async function () {
+  const Subscription = mongoose.model("Subscription");
+  return await Subscription.hasUsedTrial(this._id);
+};
+
+UserSchema.methods.getSubscriptionStatus = async function () {
+  const subscription = await this.getActiveSubscription();
+
+  if (!subscription) {
+    const hasUsedTrial = await this.hasUsedFreeTrial();
+    return {
+      status: "none",
+      planType: null,
+      canStartTrial: !hasUsedTrial,
+      isActive: false,
+      daysRemaining: 0,
+    };
+  }
+
+  return {
+    status: subscription.status,
+    planType: subscription.planType,
+    canStartTrial: false,
+    isActive: subscription.isActive,
+    daysRemaining: subscription.daysRemaining,
+    endDate: subscription.endDate,
+    autoRenew: subscription.autoRenew,
+    listingsCount: subscription.listingsCount,
+    maxListings: subscription.maxListings,
+  };
 };
 
 const User = mongoose.model("User", UserSchema);

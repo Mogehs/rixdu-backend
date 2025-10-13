@@ -6,9 +6,6 @@ export const createRating = async (req, res) => {
   try {
     const { reviewer, reviewee, stars, message, attributes, listingId } =
       req.body;
-
-    console.log(req.body);
-
     if (!reviewer || !reviewee || !stars || !message || !listingId) {
       return res.status(400).json({
         success: false,
@@ -22,9 +19,7 @@ export const createRating = async (req, res) => {
         success: false,
         message: "You cannot rate yourself",
       });
-    }
-
-    // Check if already rated this user for the same listing
+    }
     const existingRating = await Rating.findOne({
       reviewer,
       reviewee,
@@ -35,9 +30,7 @@ export const createRating = async (req, res) => {
         success: false,
         message: "You have already rated this user for this listing",
       });
-    }
-
-    // Create rating
+    }
     const rating = await Rating.create({
       reviewer,
       reviewee,
@@ -45,9 +38,7 @@ export const createRating = async (req, res) => {
       message,
       listing: listingId,
       attributes: attributes || [],
-    });
-
-    // Push rating into reviewee's profile
+    });
     const revieweeProfile = await Profile.findOne({ user: reviewee });
     if (revieweeProfile) {
       revieweeProfile.public.ratings.push(rating._id);
@@ -65,7 +56,6 @@ export const createRating = async (req, res) => {
       data: rating,
     });
   } catch (error) {
-    console.log(error);
     return res.status(500).json({
       success: false,
       message: "Error creating rating",
@@ -86,9 +76,7 @@ export const getListingRatings = async (req, res) => {
         success: false,
         message: "Listing ID is required to fetch ratings.",
       });
-    }
-
-    // ✅ Only ratings for this user + this listing
+    }
     const matchStage = {
       reviewee: new mongoose.Types.ObjectId(userId),
       listing: new mongoose.Types.ObjectId(listingId),
@@ -122,12 +110,8 @@ export const getListingRatings = async (req, res) => {
           },
         },
       },
-    ]);
-
-    // Count only for this listing
-    const total = await Rating.countDocuments(matchStage);
-
-    // Average rating only for this listing
+    ]);
+    const total = await Rating.countDocuments(matchStage);
     const avgResult = await Rating.aggregate([
       { $match: matchStage },
       {

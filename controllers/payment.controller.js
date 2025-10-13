@@ -4,36 +4,21 @@ import process from "process";
 import Listing from "../models/Listing.js";
 import PricePlan from "../models/PricePlan.js";
 import User from "../models/User.js";
-import { createListing } from "./listing.controller.js";
-
-// Temporary storage for payment data (in production, use Redis or a database)
-const tempPaymentData = new Map();
-
-// Initialize Stripe with validation
+import { createListing } from "./listing.controller.js";
+const tempPaymentData = new Map();
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 if (
   !stripeSecretKey ||
   stripeSecretKey === "sk_test_your_stripe_secret_key_here"
 ) {
-  console.warn(
-    "⚠️  Stripe secret key is not properly configured. Payment functionality will be disabled."
-  );
-  console.warn(
-    "   Please set STRIPE_SECRET_KEY in your .env file with a valid Stripe secret key."
-  );
 }
 
 const stripe =
   stripeSecretKey && stripeSecretKey !== "sk_test_your_stripe_secret_key_here"
     ? new Stripe(stripeSecretKey)
-    : null;
-
-// @desc    Create Stripe payment intent for listing plan
-// @route   POST /api/v1/payments/create-intent
-// @access  Private
+    : null;
 export const createPaymentIntent = async (req, res) => {
-  try {
-    // Check if Stripe is properly configured
+  try {
     if (!stripe) {
       return res.status(503).json({
         success: false,
@@ -43,25 +28,19 @@ export const createPaymentIntent = async (req, res) => {
       });
     }
 
-    const { planId, listingData, currency = "aed" } = req.body;
-
-    // Validate required fields
+    const { planId, listingData, currency = "aed" } = req.body;
     if (!planId || !listingData) {
       return res.status(400).json({
         success: false,
         message: "Plan ID and listing data are required",
       });
-    }
-
-    // Validate planId
+    }
     if (!mongoose.Types.ObjectId.isValid(planId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid plan ID format",
       });
-    }
-
-    // Get the price plan
+    }
     const pricePlan = await PricePlan.findById(planId);
     if (!pricePlan) {
       return res.status(404).json({
@@ -75,9 +54,7 @@ export const createPaymentIntent = async (req, res) => {
         success: false,
         message: "Price plan is not active",
       });
-    }
-
-    // Get or create Stripe customer
+    }
     let stripeCustomerId = req.user.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -89,23 +66,14 @@ export const createPaymentIntent = async (req, res) => {
         },
       });
 
-      stripeCustomerId = stripeCustomer.id;
-
-      // Update user with Stripe customer ID
+      stripeCustomerId = stripeCustomer.id;
       await User.findByIdAndUpdate(req.user.id, {
         stripeCustomerId: stripeCustomerId,
       });
-    }
-
-    // Convert price to cents (Stripe uses smallest currency unit)
-    // Use discounted price if available, otherwise use original price
+    }
     const priceToUse = pricePlan.discountedPrice || pricePlan.price;
-    const amount = Math.round(priceToUse * 100);
-
-    // Create a unique reference for this payment intent
-    const paymentReference = `payment_${Date.now()}_${req.user.id}`;
-
-    // Store listing data temporarily in memory (in production, use Redis or a database)
+    const amount = Math.round(priceToUse * 100);
+    const paymentReference = `payment_${Date.now()}_${req.user.id}`;
     tempPaymentData.set(paymentReference, {
       listingData,
       userId: req.user.id.toString(),
@@ -113,9 +81,7 @@ export const createPaymentIntent = async (req, res) => {
       planType: pricePlan.planType,
       planDuration: pricePlan.duration,
       createdAt: new Date(),
-    });
-
-    // Create payment intent with minimal metadata
+    });
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: currency.toLowerCase(),
@@ -153,17 +119,12 @@ export const createPaymentIntent = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("createPaymentIntent error:", error);
     res.status(500).json({
       success: false,
       message: "Server error creating payment intent. Please try again.",
     });
   }
-};
-
-// @desc    Confirm payment and create listing
-// @route   POST /api/v1/payments/confirm-payment
-// @access  Private
+};
 export const confirmPayment = async (req, res) => {
   try {
     const { paymentIntentId } = req.body;
@@ -173,9 +134,7 @@ export const confirmPayment = async (req, res) => {
         success: false,
         message: "Payment intent ID is required",
       });
-    }
-
-    // Retrieve payment intent from Stripe
+    }
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (!paymentIntent) {
@@ -190,21 +149,15 @@ export const confirmPayment = async (req, res) => {
         success: false,
         message: `Payment not successful. Status: ${paymentIntent.status}`,
       });
-    }
-
-    // Extract metadata
+    }
     const { planId, userId, planType, planDuration, paymentReference } =
-      paymentIntent.metadata;
-
-    // Verify user
+      paymentIntent.metadata;
     if (userId !== req.user.id.toString()) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized payment confirmation",
       });
-    }
-
-    // Get the stored listing data using payment reference
+    }
     const storedPaymentData = tempPaymentData.get(paymentReference);
     if (!storedPaymentData) {
       return res.status(404).json({
@@ -212,30 +165,20 @@ export const confirmPayment = async (req, res) => {
         message:
           "Payment data not found. Please try creating the payment again.",
       });
-    }
-
-    // Clean up temporary storage
-    tempPaymentData.delete(paymentReference);
-
-    // Get the price plan
+    }
+    tempPaymentData.delete(paymentReference);
     const pricePlan = await PricePlan.findById(planId);
     if (!pricePlan) {
       return res.status(404).json({
         success: false,
         message: "Price plan not found",
       });
-    }
-
-    // Use the stored listing data
-    const { listingData } = storedPaymentData;
-
-    // Prepare the values Map for the listing (same structure as regular listing creation)
+    }
+    const { listingData } = storedPaymentData;
     const valuesMap = {
       ...listingData.values, // Include all the dynamic field values from the draft
       ...req.body.values, // Include uploaded file data processed by middleware
-    };
-
-    // Prepare request object for createListing function
+    };
     const mockReq = {
       body: {
         storeId: listingData.storeId,
@@ -245,9 +188,7 @@ export const confirmPayment = async (req, res) => {
       },
       user: req.user,
       files: req.files, // Include files if any
-    };
-
-    // Mock response object to capture the result
+    };
     let listingResult = null;
     let createListingError = null;
 
@@ -262,34 +203,25 @@ export const confirmPayment = async (req, res) => {
           return mockRes;
         },
       }),
-    };
-
-    // Call the existing createListing function
-    await createListing(mockReq, mockRes);
-
-    // Check if listing creation failed
+    };
+    await createListing(mockReq, mockRes);
     if (createListingError) {
       return res.status(400).json({
         success: false,
         message: "Failed to create listing after payment",
         error: createListingError,
       });
-    }
-
-    // If successful, update the created listing with payment information
+    }
     const createdListing = listingResult?.data;
     if (!createdListing) {
       return res.status(500).json({
         success: false,
         message: "Listing was created but response data is missing",
       });
-    }
-
-    // Update the listing with payment-related fields
+    }
     const updatedListing = await Listing.findByIdAndUpdate(
       createdListing._id,
-      {
-        // Add payment-related fields
+      {
         plan: planType,
         planDuration: parseInt(planDuration),
         planPrice: pricePlan.discountedPrice || pricePlan.price,
@@ -318,17 +250,12 @@ export const confirmPayment = async (req, res) => {
       data: updatedListing,
     });
   } catch (error) {
-    console.error("confirmPayment error:", error);
     res.status(500).json({
       success: false,
       message: "Server error confirming payment. Please try again.",
     });
   }
-};
-
-// @desc    Handle Stripe webhook events
-// @route   POST /api/v1/payments/webhook
-// @access  Public
+};
 export const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -338,17 +265,13 @@ export const handleStripeWebhook = async (req, res) => {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
-    console.error("Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  try {
-    // Handle the event
+  try {
     switch (event.type) {
       case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object;
-
-        // Find listing by payment intent ID and update status
+        const paymentIntent = event.data.object;
         await Listing.findOneAndUpdate(
           { stripePaymentIntentId: paymentIntent.id },
           {
@@ -383,22 +306,16 @@ export const handleStripeWebhook = async (req, res) => {
       }
 
       default:
-        console.log(`Unhandled event type ${event.type}`);
     }
 
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error("Webhook handler error:", error);
     res.status(500).json({
       success: false,
       message: "Webhook handler error",
     });
   }
-};
-
-// @desc    Get payment history for user
-// @route   GET /api/v1/payments/history
-// @access  Private
+};
 export const getPaymentHistory = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -434,17 +351,154 @@ export const getPaymentHistory = async (req, res) => {
       data: payments,
     });
   } catch (error) {
-    console.error("getPaymentHistory error:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching payment history. Please try again.",
     });
   }
-};
+};
+export const createVerificationPaymentIntent = async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "Payment service is not available. Stripe configuration is missing.",
+        error: "STRIPE_NOT_CONFIGURED",
+      });
+    }
 
-// @desc    Refund payment for listing
-// @route   POST /api/v1/payments/refund/:listingId
-// @access  Private/Admin
+    const { currency = "aed" } = req.body;
+    const user = await User.findById(req.user.id);
+    const canCreatePaymentIntent =
+      (user.documentVerification.status === "unverified" &&
+        user.documentVerification.paymentStatus === "unpaid") ||
+      (user.documentVerification.status === "rejected" &&
+        user.documentVerification.paymentStatus === "unpaid");
+
+    if (!canCreatePaymentIntent) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot create payment intent. Current status: ${user.documentVerification.status}, Payment status: ${user.documentVerification.paymentStatus}`,
+      });
+    }
+    let stripeCustomerId = user.stripeCustomerId;
+
+    if (!stripeCustomerId) {
+      const stripeCustomer = await stripe.customers.create({
+        email: user.email,
+        name: user.name,
+        metadata: {
+          userId: user._id.toString(),
+        },
+      });
+
+      stripeCustomerId = stripeCustomer.id;
+      await User.findByIdAndUpdate(user._id, {
+        stripeCustomerId: stripeCustomerId,
+      });
+    }
+    const amount = 900; // AED 9.00 in cents
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: currency.toLowerCase(),
+      customer: stripeCustomerId,
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      metadata: {
+        userId: user._id.toString(),
+        type: "verification",
+        amount_aed: "9.00",
+      },
+      description: "Verification Charges - AED 9",
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount,
+        currency,
+        description: "Verification Charges - AED 9",
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message:
+        "Server error creating verification payment intent. Please try again.",
+    });
+  }
+};
+export const confirmVerificationPayment = async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+
+    if (!paymentIntentId) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment intent ID is required",
+      });
+    }
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (!paymentIntent) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment intent not found",
+      });
+    }
+
+    if (paymentIntent.status !== "succeeded") {
+      return res.status(400).json({
+        success: false,
+        message: `Payment not successful. Status: ${paymentIntent.status}`,
+      });
+    }
+    const { userId } = paymentIntent.metadata;
+    if (userId !== req.user.id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized payment confirmation",
+      });
+    }
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+    user.documentVerification.paymentStatus = "paid";
+    user.documentVerification.paymentIntentId = paymentIntentId;
+    user.documentVerification.paymentAmount = paymentIntent.amount / 100;
+    user.documentVerification.paymentCurrency =
+      paymentIntent.currency.toUpperCase();
+    user.documentVerification.paymentDate = new Date();
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Verification payment confirmed successfully. You can now submit your verification documents.",
+      data: {
+        paymentStatus: "paid",
+        paymentAmount: paymentIntent.amount / 100,
+        paymentCurrency: paymentIntent.currency.toUpperCase(),
+        canSubmitVerification: true,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message:
+        "Server error confirming verification payment. Please try again.",
+    });
+  }
+};
 export const refundPayment = async (req, res) => {
   try {
     const { listingId } = req.params;
@@ -477,14 +531,10 @@ export const refundPayment = async (req, res) => {
         success: false,
         message: "Payment was not successful, cannot refund",
       });
-    }
-
-    // Calculate refund amount (in cents)
+    }
     const refundAmount = amount
       ? Math.round(amount * 100)
-      : Math.round(listing.paymentAmount * 100);
-
-    // Create refund in Stripe
+      : Math.round(listing.paymentAmount * 100);
     const refund = await stripe.refunds.create({
       payment_intent: listing.stripePaymentIntentId,
       amount: refundAmount,
@@ -493,9 +543,7 @@ export const refundPayment = async (req, res) => {
         listingId: listingId.toString(),
         adminId: req.user.id.toString(),
       },
-    });
-
-    // Update listing with refund information
+    });
     listing.refundId = refund.id;
     listing.refundAmount = refundAmount / 100; // Convert back from cents
     listing.refundDate = new Date();
@@ -518,7 +566,6 @@ export const refundPayment = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("refundPayment error:", error);
     res.status(500).json({
       success: false,
       message: "Server error processing refund. Please try again.",

@@ -119,8 +119,7 @@ export const sendVerificationCode = async (req, res) => {
 
     await user.save({ validateBeforeSave: false });
 
-    try {
-      // Queue the job for sending verification code
+    try {
       await AuthJobService.sendVerificationCode(
         verificationMethod,
         verificationMethod === "phone" ? user.phoneNumber : user.email,
@@ -137,12 +136,6 @@ export const sendVerificationCode = async (req, res) => {
         },
       });
     } catch (jobError) {
-      console.error(
-        `Error queueing verification ${verificationMethod} job:`,
-        jobError.message
-      );
-
-      // Fallback to direct sending if job queue fails
       if (verificationMethod === "phone") {
         const smsText = getVerificationSMSTemplate(verificationCode);
         await sendSMS({
@@ -179,7 +172,6 @@ export const sendVerificationCode = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error(`Verification code error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error sending verification code. Please try again.",
@@ -189,17 +181,13 @@ export const sendVerificationCode = async (req, res) => {
 
 export const register = async (req, res) => {
   try {
-    let { email, password, name, phoneNumber, verificationCode } = req.body;
-
-    // According to documentation, phoneNumber, password, and verificationCode are required
+    let { email, password, name, phoneNumber, verificationCode } = req.body;
     if (!verificationCode || !password) {
       return res.status(400).json({
         success: false,
         message: "Please provide password and verification code",
       });
-    }
-
-    // Support both email and phoneNumber, but prioritize phoneNumber as per documentation
+    }
     if (!phoneNumber && !email) {
       return res.status(400).json({
         success: false,
@@ -240,23 +228,13 @@ export const register = async (req, res) => {
     user.verificationToken = undefined;
     user.verificationExpire = undefined;
 
-    await user.save();
-
-    // Queue profile creation job (non-blocking)
+    await user.save();
     try {
       await AuthJobService.createUserProfile(user._id);
-      console.log(`Profile creation job queued for user ${user._id}`);
-    } catch (profileJobError) {
-      console.error(
-        `Error queueing profile creation job: ${profileJobError.message}`
-      );
-      // Continue with registration even if profile job queueing fails
-      // The profile can be created later or manually
-    }
-
-    return sendTokenResponse(user, 201, res);
+    } catch (e) {
+  }
+return sendTokenResponse(user, 201, res);
   } catch (error) {
-    console.error(`Registration error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error during registration. Please try again.",
@@ -321,7 +299,6 @@ export const login = async (req, res) => {
 
     return sendTokenResponse(user, 200, res);
   } catch (error) {
-    console.error(`Login error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error during login. Please try again.",
@@ -345,7 +322,6 @@ export const getMe = async (req, res) => {
       data: user,
     });
   } catch (error) {
-    console.error(`Get user profile error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error retrieving user profile",
@@ -405,8 +381,7 @@ export const forgotPassword = async (req, res) => {
     const resetCode = User.schema.methods.generatePasswordResetToken.call(user);
     await user.save({ validateBeforeSave: false });
 
-    try {
-      // Queue the job for sending password reset code
+    try {
       await AuthJobService.sendPasswordResetCode(
         verificationMethod,
         verificationMethod === "phone" ? user.phoneNumber : user.email,
@@ -419,12 +394,6 @@ export const forgotPassword = async (req, res) => {
         message: `Password reset code sent to ${verificationMethod}`,
       });
     } catch (jobError) {
-      console.error(
-        `Error queueing password reset ${verificationMethod} job:`,
-        jobError.message
-      );
-
-      // Fallback to direct sending if job queue fails
       if (verificationMethod === "phone") {
         const smsText = getPasswordResetSMSTemplate(resetCode);
         await sendSMS({
@@ -455,8 +424,6 @@ export const forgotPassword = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error(`Forgot password error: ${error.message}`);
-
     if (error.user) {
       error.user.resetPasswordToken = undefined;
       error.user.resetPasswordExpire = undefined;
@@ -525,7 +492,6 @@ export const resetPassword = async (req, res) => {
       message: "Password reset successful",
     });
   } catch (error) {
-    console.error(`Reset password error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error resetting password. Please try again.",
@@ -571,8 +537,7 @@ export const resendVerificationCode = async (req, res) => {
     const verificationCode = user.generateVerificationToken(verificationMethod);
     await user.save({ validateBeforeSave: false });
 
-    try {
-      // Queue the job for resending verification code
+    try {
       await AuthJobService.sendVerificationCode(
         verificationMethod,
         verificationMethod === "phone" ? user.phoneNumber : user.email,
@@ -585,12 +550,6 @@ export const resendVerificationCode = async (req, res) => {
         message: `Verification code resent to ${verificationMethod}`,
       });
     } catch (jobError) {
-      console.error(
-        `Error queueing resend verification ${verificationMethod} job:`,
-        jobError.message
-      );
-
-      // Fallback to direct sending if job queue fails
       if (verificationMethod === "phone") {
         const smsText = getVerificationSMSTemplate(verificationCode);
         await sendSMS({
@@ -621,7 +580,6 @@ export const resendVerificationCode = async (req, res) => {
       }
     }
   } catch (error) {
-    console.error(`Resend verification error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error sending verification code. Please try again.",
@@ -669,7 +627,6 @@ export const changePassword = async (req, res) => {
       message: "Password updated successfully",
     });
   } catch (error) {
-    console.error(`Change password error: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error updating password. Please try again.",
@@ -679,43 +636,22 @@ export const changePassword = async (req, res) => {
 
 export const auth0Login = async (req, res) => {
   const { accessToken } = req.body;
-
-  console.log("Auth0 Login - Full request body:", req.body);
-  console.log("Auth0 Login - Request received:", {
-    hasAccessToken: !!accessToken,
-    tokenLength: accessToken?.length,
-    tokenPreview: accessToken ? `${accessToken.substring(0, 20)}...` : "none",
-  });
-
   try {
     if (!accessToken) {
-      console.error("Auth0 Login - No access token provided");
       return res.status(400).json({
         success: false,
         message: "Access token is required",
       });
     }
-
-    // First, try to get user info from Auth0 using the access token
-    console.log("Auth0 Login - Getting user info from Auth0...");
     const userInfoResponse = await axios.get(
       `https://${process.env.AUTH0_DOMAIN}/userinfo`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
     );
-
-    console.log("Auth0 Login - User info received:", {
-      email: userInfoResponse.data.email,
-      name: userInfoResponse.data.name,
-      sub: userInfoResponse.data.sub,
-      picture: userInfoResponse.data.picture,
-    });
-
     const { email, name, sub, picture } = userInfoResponse.data;
 
     if (!sub) {
-      console.error("Auth0 Login - No sub claim in user info");
       return res.status(400).json({
         success: false,
         message: "Invalid user information from Auth0",
@@ -723,26 +659,18 @@ export const auth0Login = async (req, res) => {
     }
 
     const provider = sub.split("|")[0];
-
-    // Find or create user
-    console.log("Auth0 Login - Looking for existing user with auth0Id:", sub);
     let user = await User.findOne({ auth0Id: sub });
 
     if (!user && email) {
-      console.log("Auth0 Login - Looking for existing user with email:", email);
       user = await User.findOne({ email: email });
 
       if (user) {
-        console.log("Auth0 Login - Linking existing user account");
         user.auth0Id = sub;
         user.provider = provider;
         user.isVerified = true;
-        user.verificationMethod = "auth0";
-
-        // Update avatar if picture is provided
+        user.verificationMethod = "auth0";
         if (picture) {
           user.avatar = picture;
-          console.log("Auth0 Login - Updated existing user avatar:", picture);
         }
 
         await user.save();
@@ -750,7 +678,6 @@ export const auth0Login = async (req, res) => {
     }
 
     if (!user) {
-      console.log("Auth0 Login - Creating new user");
       user = new User({
         auth0Id: sub,
         email,
@@ -761,35 +688,23 @@ export const auth0Login = async (req, res) => {
         role: "user",
         ...(picture && { avatar: picture }), // Add avatar if picture is provided
       });
-      await user.save();
-
-      // Queue profile creation job (non-blocking)
+      await user.save();
       try {
         await AuthJobService.createUserProfile(user._id);
-        console.log(`Profile creation job queued for Auth0 user ${user._id}`);
-      } catch (profileJobError) {
-        console.error(
-          `Error queueing profile creation job for Auth0 user: ${profileJobError.message}`
-        );
-        // Continue with login even if profile job queueing fails
-      }
-    } else {
-      // For existing users, update avatar if picture is provided and different
+      } catch (e) {
+  }
+} else {
       if (picture && user.avatar !== picture) {
         user.avatar = picture;
         await user.save();
-        console.log("Auth0 Login - Updated existing user avatar:", picture);
       }
-    }
-
-    // Sync avatar to Profile model
+    }
     if (picture || user.avatar) {
       try {
         const Profile = mongoose.model("Profile");
         let profile = await Profile.findOne({ user: user._id });
 
-        if (!profile) {
-          // Create profile if it doesn't exist
+        if (!profile) {
           profile = await Profile.create({
             user: user._id,
             personal: {
@@ -798,36 +713,18 @@ export const auth0Login = async (req, res) => {
             jobProfile: {},
             favorites: { listings: [] },
           });
-          console.log(
-            `Profile created with avatar for Auth0 user: ${user._id}`
-          );
-        } else {
-          // Update existing profile avatar
+        } else {
           if (!profile.personal) {
             profile.personal = {};
           }
           profile.personal.avatar = picture || user.avatar;
           await profile.save();
-          console.log(`Profile avatar synced for Auth0 user: ${user._id}`);
         }
-      } catch (profileError) {
-        console.error(
-          `Error syncing avatar to profile: ${profileError.message}`
-        );
-        // Continue with login even if profile sync fails
-      }
-    }
-
-    console.log("Auth0 Login - Sending token response");
+      } catch (e) {
+  }
+}
     return sendTokenResponse(user, 200, res);
   } catch (error) {
-    console.error("Auth0 Login Error:", {
-      message: error.message,
-      stack: error.stack,
-      response: error.response?.data,
-      status: error.response?.status,
-    });
-
     return res.status(500).json({
       success: false,
       message: "Authentication failed. Please try again.",

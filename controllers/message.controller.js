@@ -9,22 +9,17 @@ export const getMessages = async (req, res) => {
       chatId,
       parseInt(page),
       parseInt(limit)
-    );
-
-    // Sort messages to ensure latest messages are at the end
+    );
     messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     return res.status(200).json(messages);
   } catch (error) {
-    console.error("Error fetching messages:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
 export const sendMessage = async (req, res) => {
-  const { chatId, senderId, message } = req.body;
-
-  // Validation
+  const { chatId, senderId, message } = req.body;
   if (!chatId || !senderId || !message || !message.trim()) {
     return res.status(400).json({
       message: "Chat ID, sender ID, and message content are required",
@@ -38,14 +33,10 @@ export const sendMessage = async (req, res) => {
       content: message.trim(),
     });
 
-    await newMessage.save();
-
-    // Populate the sender field
+    await newMessage.save();
     const populatedMessage = await Message.findById(newMessage._id).populate(
       "sender"
-    );
-
-    // Update chat with last message info
+    );
     const chat = await Chat.findById(chatId);
     if (chat) {
       chat.lastMessage = message;
@@ -55,12 +46,9 @@ export const sendMessage = async (req, res) => {
 
     return res.status(201).json(populatedMessage);
   } catch (error) {
-    console.error("Error sending message:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
-};
-
-// Helper function for socket usage (keep existing functionality)
+};
 export const sendMessageSocket = async (chatId, content, senderId) => {
   try {
     const message = new Message({
@@ -69,14 +57,10 @@ export const sendMessageSocket = async (chatId, content, senderId) => {
       content,
     });
 
-    await message.save();
-
-    // Populate the sender field
+    await message.save();
     const populatedMessage = await Message.findById(message._id).populate(
       "sender"
-    );
-
-    // Update chat with last message info
+    );
     const chat = await Chat.findById(chatId);
     if (chat) {
       chat.lastMessage = content;
@@ -86,7 +70,6 @@ export const sendMessageSocket = async (chatId, content, senderId) => {
 
     return populatedMessage;
   } catch (error) {
-    console.error("Error sending message:", error);
     throw error;
   }
 };
@@ -109,12 +92,9 @@ export const markMessagesAsRead = async (req, res) => {
       modifiedCount: result.modifiedCount,
     });
   } catch (error) {
-    console.error("Error marking messages as read:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
-};
-
-// Helper function for socket usage (keep existing functionality)
+};
 export const markChatMessagesAsRead = async (chatId, userId) => {
   try {
     const result = await Message.updateMany(
@@ -127,7 +107,6 @@ export const markChatMessagesAsRead = async (chatId, userId) => {
     );
     return result.modifiedCount;
   } catch (error) {
-    console.error("Error marking messages as read:", error);
     throw error;
   }
 };

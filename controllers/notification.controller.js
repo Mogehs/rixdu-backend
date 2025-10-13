@@ -46,9 +46,8 @@ export const createAndDispatchNotification = async (payload, io) => {
   try {
     io?.to?.(`user:${notif.userId}`)?.emit?.("notification:new", notif);
   } catch (e) {
-    console.log("Error sending in-app notifications:", e?.message || e);
   }
-  await handleEmailAndPushOnly(payload, notif);
+await handleEmailAndPushOnly(payload, notif);
   return notif;
 };
 const handleEmailAndPushOnly = async (payload, notif = null) => {
@@ -102,10 +101,9 @@ const handleEmailAndPushOnly = async (payload, notif = null) => {
           }
         }
       }
-    } catch (err) {
-      console.error("Push notification error:", err);
-    }
+    } catch (e) {
   }
+}
 };
 export const getNotifications = async (req, res) => {
   try {
@@ -203,7 +201,6 @@ export const getPreferences = async (req, res) => {
 export const upsertPreference = async (req, res) => {
   try {
     const { storeId, channels } = req.body;
-    console.log(req.body);
     if (!storeId)
       return res
         .status(400)
@@ -323,9 +320,8 @@ export const notifyStoreSubscribersOnListing = async ({
         }
       }
     } catch (e) {
-      console.log("Error selecting primary image:", e?.message || e);
-    }
-    return null;
+  }
+return null;
   };
   if (!io) io = getIO();
   const prefs = await NotificationPreference.find({ storeId }).lean();
@@ -429,15 +425,13 @@ export const notifyStoreSubscribersOnListing = async ({
       io?.to?.(`user:${n.userId}`)?.emit?.("notification:new", n);
     }
   } catch (e) {
-    console.log("Error sending in-app notifications:", e?.message || e);
   }
-  for (const doc of nonInAppDocs) {
+for (const doc of nonInAppDocs) {
     try {
       await handleEmailAndPushOnly(doc);
-    } catch (err) {
-      console.error(`Failed to send email/push for user ${doc.userId}:`, err);
-    }
+    } catch (e) {
   }
+}
   try {
     const emailUserIds = docs
       .filter((n) => n.channels?.email)
@@ -469,9 +463,8 @@ export const notifyStoreSubscribersOnListing = async ({
       if (tasks.length) await Promise.allSettled(tasks);
     }
   } catch (e) {
-    console.log("Error sending email notifications:", e?.message || e);
   }
-  try {
+try {
     const pushUserIds = docs
       .filter((n) => n.channels?.push)
       .map((n) => n.userId?.toString?.())
@@ -537,22 +530,19 @@ export const notifyStoreSubscribersOnListing = async ({
                   const results = await Promise.allSettled(cleanupTasks);
                   results.forEach((r, idx) => {
                     if (r.status === "rejected") {
-                      console.error(`Cleanup task ${idx} failed:`, r.reason);
                     }
                   });
                 }
               }
-            } catch (err) {
-              console.error("Push notification send error:", err);
-            }
-          }
+            } catch (e) {
+  }
+}
         }
       }
     }
-  } catch (err) {
-    console.error("Push notification batch error:", err);
+  } catch (e) {
   }
-  return {
+return {
     created: inserted.length,
     totalProcessed: docs.length,
     inAppNotifications: inserted.length,
@@ -573,9 +563,7 @@ export const registerFCMToken = async (req, res) => {
     }
 
     const userId = req.user.id;
-    const User = (await import("../models/User.js")).default;
-
-    // Check if token already exists to prevent duplicates
+    const User = (await import("../models/User.js")).default;
     const existingUser = await User.findById(userId);
     const existingToken = existingUser?.fcmTokens?.find(
       (t) => t.token === token
@@ -587,18 +575,14 @@ export const registerFCMToken = async (req, res) => {
         message: "FCM token already registered",
         alreadyExists: true,
       });
-    }
-
-    // Remove any existing tokens for this device to prevent duplicates
+    }
     await User.findByIdAndUpdate(userId, {
       $pull: {
         fcmTokens: {
           $or: [{ token: token }, { deviceId: deviceId }],
         },
       },
-    });
-
-    // Add the new token
+    });
     await User.findByIdAndUpdate(userId, {
       $push: {
         fcmTokens: {
@@ -615,7 +599,6 @@ export const registerFCMToken = async (req, res) => {
       message: "FCM token registered successfully",
     });
   } catch (err) {
-    console.error("FCM token registration error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to register FCM token",
@@ -646,7 +629,6 @@ export const unregisterFCMToken = async (req, res) => {
       remainingTokens: result?.fcmTokens?.length || 0,
     });
   } catch (err) {
-    console.error("FCM token unregistration error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to unregister FCM token",
@@ -686,7 +668,6 @@ export const createTestNotification = async (req, res) => {
           },
     });
   } catch (err) {
-    console.error("Test notification error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to create test notification",

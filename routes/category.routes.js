@@ -35,10 +35,8 @@ router.route("/slug/:slug/children").get(getCategoryChildren);
 
 router.route("/path/:identifier").get(getCategoryPath);
 
-// Route to get dynamic filter fields for a category in a store
 router.route("/filters/:storeSlug/:categorySlug").get(getDynamicFilterFields);
 
-// Route to update fields for all leaf children of a category
 router
   .route("/:categoryId/update-leaf-fields")
   .put(protect, authorize("admin"), updateFieldsForAllLeafChildren);

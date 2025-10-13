@@ -9,11 +9,6 @@ import {
   formatEmiratesId,
 } from "../utils/verificationValidation.js";
 
-/**
- * Submit verification documents
- * @route POST /api/v1/verification/submit
- * @access Private
- */
 export const submitVerification = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -23,17 +18,13 @@ export const submitVerification = async (req, res) => {
       emiratesIdNumber,
       businessLicenseNumber,
       businessName,
-    } = req.body;
-
-    // Validate verification type
+    } = req.body;
     if (!["individual", "business"].includes(verificationType)) {
       return res.status(400).json({
         success: false,
         message: "Verification type must be either 'individual' or 'business'",
       });
-    }
-
-    // Validate contact number (UAE format)
+    }
     if (!isValidUAEPhoneNumber(contactNumber)) {
       return res.status(400).json({
         success: false,
@@ -48,60 +39,58 @@ export const submitVerification = async (req, res) => {
         success: false,
         message: "User not found",
       });
-    }
+    }
+    if (!user.canSubmitVerification()) {
+      if (user.documentVerification.paymentStatus !== "paid") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payment required before submitting verification. Please complete the payment first.",
+          needsPayment: true,
+        });
+      }
 
-    // Check if user can submit verification
-    if (!user.canSubmitVerification()) {
       return res.status(400).json({
         success: false,
         message: `Cannot submit verification. Current status: ${user.documentVerification.status}`,
       });
-    }
-
-    // Handle file uploads
+    }
     const documents = {};
 
-    if (verificationType === "individual") {
-      // Individual verification requires Emirates ID
+    if (verificationType === "individual") {
       if (!emiratesIdNumber || !isValidEmiratesIdFormat(emiratesIdNumber)) {
         return res.status(400).json({
           success: false,
           message:
             "Valid Emirates ID number is required for individual verification (format: 784-YYYY-XXXXXXX-X)",
         });
+      }
+      if (req.files && req.files.emiratesIdFront && req.files.emiratesIdBack) {
+        const frontImageResult = await uploadToCloudinary(
+          req.files.emiratesIdFront[0].buffer,
+          req.files.emiratesIdFront[0].originalname,
+          "verification/emirates-id"
+        );
+
+        const backImageResult = await uploadToCloudinary(
+          req.files.emiratesIdBack[0].buffer,
+          req.files.emiratesIdBack[0].originalname,
+          "verification/emirates-id"
+        );
+
+        documents.emiratesId = {
+          frontImage: frontImageResult.secure_url,
+          backImage: backImageResult.secure_url,
+          idNumber: formatEmiratesId(emiratesIdNumber),
+        };
+      } else {
+        documents.emiratesId = {
+          frontImage: null,
+          backImage: null,
+          idNumber: formatEmiratesId(emiratesIdNumber),
+        };
       }
-
-      if (
-        !req.files ||
-        !req.files.emiratesIdFront ||
-        !req.files.emiratesIdBack
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Both front and back images of Emirates ID are required",
-        });
-      }
-
-      // Upload Emirates ID images
-      const frontImageResult = await uploadToCloudinary(
-        req.files.emiratesIdFront[0].buffer,
-        req.files.emiratesIdFront[0].originalname,
-        "verification/emirates-id"
-      );
-
-      const backImageResult = await uploadToCloudinary(
-        req.files.emiratesIdBack[0].buffer,
-        req.files.emiratesIdBack[0].originalname,
-        "verification/emirates-id"
-      );
-
-      documents.emiratesId = {
-        frontImage: frontImageResult.secure_url,
-        backImage: backImageResult.secure_url,
-        idNumber: formatEmiratesId(emiratesIdNumber),
-      };
-    } else if (verificationType === "business") {
-      // Business verification requires Emirates ID and Business License
+    } else if (verificationType === "business") {
       if (!emiratesIdNumber || !isValidEmiratesIdFormat(emiratesIdNumber)) {
         return res.status(400).json({
           success: false,
@@ -126,55 +115,55 @@ export const submitVerification = async (req, res) => {
           success: false,
           message: "Business name is required for business verification",
         });
-      }
-
+      }
       if (
-        !req.files ||
-        !req.files.emiratesIdFront ||
-        !req.files.emiratesIdBack ||
-        !req.files.businessLicense
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Emirates ID (front & back) and business license images are required",
-        });
+        req.files &&
+        req.files.emiratesIdFront &&
+        req.files.emiratesIdBack &&
+        req.files.businessLicense
+      ) {
+        const frontImageResult = await uploadToCloudinary(
+          req.files.emiratesIdFront[0].buffer,
+          req.files.emiratesIdFront[0].originalname,
+          "verification/emirates-id"
+        );
+
+        const backImageResult = await uploadToCloudinary(
+          req.files.emiratesIdBack[0].buffer,
+          req.files.emiratesIdBack[0].originalname,
+          "verification/emirates-id"
+        );
+        const businessLicenseResult = await uploadToCloudinary(
+          req.files.businessLicense[0].buffer,
+          req.files.businessLicense[0].originalname,
+          "verification/business-license"
+        );
+
+        documents.emiratesId = {
+          frontImage: frontImageResult.secure_url,
+          backImage: backImageResult.secure_url,
+          idNumber: formatEmiratesId(emiratesIdNumber),
+        };
+
+        documents.businessLicense = {
+          image: businessLicenseResult.secure_url,
+          licenseNumber: businessLicenseNumber.trim(),
+          businessName: businessName.trim(),
+        };
+      } else {
+        documents.emiratesId = {
+          frontImage: null,
+          backImage: null,
+          idNumber: formatEmiratesId(emiratesIdNumber),
+        };
+
+        documents.businessLicense = {
+          image: null,
+          licenseNumber: businessLicenseNumber.trim(),
+          businessName: businessName.trim(),
+        };
       }
-
-      // Upload Emirates ID images
-      const frontImageResult = await uploadToCloudinary(
-        req.files.emiratesIdFront[0].buffer,
-        req.files.emiratesIdFront[0].originalname,
-        "verification/emirates-id"
-      );
-
-      const backImageResult = await uploadToCloudinary(
-        req.files.emiratesIdBack[0].buffer,
-        req.files.emiratesIdBack[0].originalname,
-        "verification/emirates-id"
-      );
-
-      // Upload Business License
-      const businessLicenseResult = await uploadToCloudinary(
-        req.files.businessLicense[0].buffer,
-        req.files.businessLicense[0].originalname,
-        "verification/business-license"
-      );
-
-      documents.emiratesId = {
-        frontImage: frontImageResult.secure_url,
-        backImage: backImageResult.secure_url,
-        idNumber: formatEmiratesId(emiratesIdNumber),
-      };
-
-      documents.businessLicense = {
-        image: businessLicenseResult.secure_url,
-        licenseNumber: businessLicenseNumber.trim(),
-        businessName: businessName.trim(),
-      };
-    }
-
-    // Update user verification data
+    }
     user.documentVerification = {
       status: "pending",
       type: verificationType,
@@ -211,11 +200,6 @@ export const submitVerification = async (req, res) => {
   }
 };
 
-/**
- * Get verification status
- * @route GET /api/v1/verification/status
- * @access Private
- */
 export const getVerificationStatus = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select(
@@ -240,6 +224,10 @@ export const getVerificationStatus = async (req, res) => {
         rejectionReason: user.documentVerification.rejectionReason,
         canSubmit: user.canSubmitVerification(),
         isVerified: user.isDocumentVerified(),
+        paymentStatus: user.documentVerification.paymentStatus,
+        paymentAmount: user.documentVerification.paymentAmount,
+        paymentCurrency: user.documentVerification.paymentCurrency,
+        paymentDate: user.documentVerification.paymentDate,
       },
     });
   } catch (error) {
@@ -251,11 +239,6 @@ export const getVerificationStatus = async (req, res) => {
   }
 };
 
-/**
- * Admin: Get pending verifications
- * @route GET /api/v1/verification/pending
- * @access Private (Admin only)
- */
 export const getPendingVerifications = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
@@ -296,26 +279,17 @@ export const getPendingVerifications = async (req, res) => {
   }
 };
 
-/**
- * Admin: Review verification (approve/reject)
- * @route PUT /api/v1/verification/review/:userId
- * @access Private (Admin only)
- */
 export const reviewVerification = async (req, res) => {
   try {
     const { userId } = req.params;
     const { action, rejectionReason } = req.body;
-    const reviewerId = req.user.id;
-
-    // Validate action
+    const reviewerId = req.user.id;
     if (!["approve", "reject"].includes(action)) {
       return res.status(400).json({
         success: false,
         message: "Action must be either 'approve' or 'reject'",
       });
-    }
-
-    // If rejecting, require a reason
+    }
     if (action === "reject" && !rejectionReason) {
       return res.status(400).json({
         success: false,
@@ -329,17 +303,13 @@ export const reviewVerification = async (req, res) => {
         success: false,
         message: "User not found",
       });
-    }
-
-    // Check if verification is in pending status
+    }
     if (user.documentVerification.status !== "pending") {
       return res.status(400).json({
         success: false,
         message: `Cannot review verification. Current status: ${user.documentVerification.status}`,
       });
-    }
-
-    // Update verification status
+    }
     if (action === "approve") {
       user.documentVerification.status = "verified";
       user.documentVerification.verifiedAt = new Date();
@@ -379,11 +349,6 @@ export const reviewVerification = async (req, res) => {
   }
 };
 
-/**
- * Admin: Get verification details
- * @route GET /api/v1/verification/details/:userId
- * @access Private (Admin only)
- */
 export const getVerificationDetails = async (req, res) => {
   try {
     const { userId } = req.params;

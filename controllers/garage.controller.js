@@ -6,12 +6,10 @@ import {
 } from "../utils/cloudinaryUpload.js";
 import { Buffer } from "buffer";
 
-class GarageController {
-  // Create a new garage
+class GarageController {
   async createGarage(req, res) {
     try {
-      const { location, services = [], ...rest } = req.body;
-      // Convert location  to GeoJSON
+      const { location, services = [], ...rest } = req.body;
       const geoLocation =
         location?.lat && location?.lng
           ? {
@@ -24,27 +22,19 @@ class GarageController {
         ...rest,
         owner: req.user.id,
         location: geoLocation,
-      };
-
-      // Generate slug if not provided
+      };
       if (!garageData.slug || garageData.slug.trim() === "") {
         garageData.slug = garageData.name
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "");
-      }
-
-      // Ensure unique slug
+      }
       const existingGarage = await Garage.findOne({ slug: garageData.slug });
       if (existingGarage) {
         garageData.slug = `${garageData.slug}-${Date.now()}`;
-      }
-
-      // Save garage
+      }
       const garage = new Garage(garageData);
-      await garage.save();
-
-      // If services provided, create them
+      await garage.save();
       let createdServices = [];
       if (services.length > 0) {
         createdServices = await Promise.all(
@@ -56,21 +46,15 @@ class GarageController {
             await newService.save();
             return newService;
           })
-        );
-        // store references to created services on the garage document
+        );
         try {
           const serviceIds = createdServices.map((s) => s._id);
           if (!Array.isArray(garage.services)) garage.services = [];
           garage.services.push(...serviceIds);
           await garage.save();
-        } catch (err) {
-          // non-fatal: creation succeeded but linking failed
-          console.warn(
-            "Failed to link created services to garage:",
-            err?.message || err
-          );
-        }
-      }
+        } catch (e) {
+  }
+}
 
       res.status(201).json({
         success: true,
@@ -87,9 +71,7 @@ class GarageController {
         error: error.message, // short error message in response
       });
     }
-  }
-
-  // Get all garages with filters
+  }
   async getAllGarages(req, res) {
     try {
       const {
@@ -106,37 +88,27 @@ class GarageController {
         radius = 10000,
       } = req.query;
 
-      let query = { isActive: true };
-
-      // Search filter
+      let query = { isActive: true };
       if (search) {
         query.$or = [
           { name: { $regex: search, $options: "i" } },
           { description: { $regex: search, $options: "i" } },
           { specialties: { $in: [new RegExp(search, "i")] } },
         ];
-      }
-
-      // Service filter
+      }
       if (service && service !== "All Services") {
         query.specialties = { $in: [service] };
-      }
-
-      // Location filter
+      }
       if (location && location !== "All Locations") {
         query.address = {
           $regex: location.replace(", Dubai", ""),
           $options: "i",
         };
-      }
-
-      // Rating filter
+      }
       if (rating && rating !== "All Ratings") {
         const minRating = parseFloat(rating.split("+")[0]);
         query["rating.average"] = { $gte: minRating };
-      }
-
-      // Geolocation filter
+      }
       if (lat && lng) {
         query.location = {
           $near: {
@@ -176,9 +148,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Get garage by slug
+  }
   async getGarageBySlug(req, res) {
     try {
       const { slug } = req.params;
@@ -193,9 +163,7 @@ class GarageController {
           success: false,
           message: "Garage not found",
         });
-      }
-
-      // Get garage services
+      }
       const services = await GarageService.find({
         garage: garage._id,
         isActive: true,
@@ -209,82 +177,59 @@ class GarageController {
         },
       });
     } catch (error) {
-      console.log(error);
       res.status(500).json({
         success: false,
         message: "Error fetching garage",
         error: error.message,
       });
     }
-  }
-
-  // Update garage
+  }
   async updateGarage(req, res) {
     try {
       const { slug } = req.params;
-      const updateData = { ...req.body };
-
-      // Extract services from payload (if any) for special handling
+      const updateData = { ...req.body };
       const servicesPayload = Array.isArray(updateData.services)
         ? updateData.services
         : [];
-      delete updateData.services;
-
-      // Remove fields that shouldn't be updated directly
+      delete updateData.services;
       delete updateData.owner;
       delete updateData.totalBookings;
-      delete updateData.rating;
-
-      // Ensure the garage exists and belongs to the authenticated user
+      delete updateData.rating;
       const garage = await Garage.findOne({ slug, owner: req.user.id });
       if (!garage) {
         return res.status(404).json({
           success: false,
           message: "Garage not found or unauthorized",
         });
-      }
-
-      // Update garage basic fields
+      }
       const updatedGarage = await Garage.findOneAndUpdate(
         { _id: garage._id },
         updateData,
         { new: true, runValidators: true }
-      );
-
-      // Process services: update existing ones (by id) or create new ones
+      );
       const processedServices = [];
       for (const svc of servicesPayload) {
         const svcId = svc._id || svc.id || null;
-        if (svcId) {
-          // Update existing service only if it belongs to this garage
+        if (svcId) {
           const updatedService = await GarageService.findOneAndUpdate(
             { _id: svcId, garage: garage._id },
             { ...svc, garage: garage._id },
             { new: true, runValidators: true }
           );
-          if (updatedService) processedServices.push(updatedService);
-          // If service id provided but not found, ignore or optionally create?
-        } else {
-          // Create new service linked to this garage
+          if (updatedService) processedServices.push(updatedService);
+        } else {
           const newService = new GarageService({ ...svc, garage: garage._id });
           await newService.save();
-          processedServices.push(newService);
-          // ensure the garage references the new service
+          processedServices.push(newService);
           try {
             if (!Array.isArray(updatedGarage.services))
               updatedGarage.services = [];
             updatedGarage.services.push(newService._id);
             await updatedGarage.save();
-          } catch (err) {
-            console.warn(
-              "Failed to link new service to garage during update:",
-              err?.message || err
-            );
-          }
-        }
-      }
-
-      // Return canonical list of services for this garage
+          } catch (e) {
+  }
+}
+      }
       const currentServices = await GarageService.find({
         garage: garage._id,
         isActive: true,
@@ -302,9 +247,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Upload garage images
+  }
   async uploadImages(req, res) {
     try {
       const { slug } = req.params;
@@ -323,22 +266,17 @@ class GarageController {
           success: false,
           message: "No files uploaded",
         });
-      }
-
-      // Normalize files to ensure .buffer is a Node Buffer (some clients give ArrayBuffer)
+      }
       const normalizedFiles = req.files.map((file) => {
         const buf = file.buffer;
-        if (!buf) return file;
-        // If ArrayBuffer or TypedArray, convert to Buffer
+        if (!buf) return file;
         if (buf instanceof ArrayBuffer) {
           file.buffer = Buffer.from(buf);
         } else if (ArrayBuffer.isView(buf) && !(buf instanceof Buffer)) {
           file.buffer = Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength);
         }
         return file;
-      });
-
-      // Upload sequentially with a single retry to reduce transient timeout errors
+      });
       const imageUrls = [];
       for (const file of normalizedFiles) {
         let attempt = 0;
@@ -350,8 +288,7 @@ class GarageController {
               file,
               `garages/${garage._id}`,
               "image"
-            );
-            // uploadToCloudinary resolves with { url, public_id, ... } per util
+            );
             if (res && (res.url || res.secure_url)) {
               imageUrls.push(res.url || res.secure_url);
               uploaded = res;
@@ -359,17 +296,9 @@ class GarageController {
               throw new Error("Invalid upload response");
             }
           } catch (err) {
-            console.warn(
-              `Upload attempt ${attempt} failed for file ${
-                file.originalname || ""
-              }:`,
-              err?.message || err
-            );
-            if (attempt >= 2) {
-              // rethrow to abort the whole operation
+            if (attempt >= 2) {
               throw err;
-            }
-            // small delay before retry
+            }
             await new Promise((r) => setTimeout(r, 500));
           }
         }
@@ -399,16 +328,13 @@ class GarageController {
         },
       });
     } catch (error) {
-      console.log(error);
       res.status(500).json({
         success: false,
         message: "Error uploading images",
         error: error.message,
       });
     }
-  }
-
-  // Delete garage images
+  }
   async deleteImages(req, res) {
     try {
       const { slug } = req.params;
@@ -429,27 +355,20 @@ class GarageController {
         return res
           .status(400)
           .json({ success: false, message: "No images specified to delete" });
-      }
-
-      // Helper: extract public_id from Cloudinary URL when publicIds not provided
+      }
       const extractPublicIdFromUrl = (url) => {
         try {
-          const u = new URL(url);
-          // path after '/upload/' usually contains version and public id + ext
+          const u = new URL(url);
           const parts = u.pathname.split("/upload/");
           if (parts.length < 2) return null;
-          let idWithExt = parts[1];
-          // remove any version prefix like v1623456789/
-          idWithExt = idWithExt.replace(/^v\d+\//, "");
-          // strip extension
+          let idWithExt = parts[1];
+          idWithExt = idWithExt.replace(/^v\d+\//, "");
           idWithExt = idWithExt.replace(/\.[^/.]+$/, "");
           return idWithExt;
         } catch {
           return null;
         }
-      };
-
-      // Build list of publicIds to delete
+      };
       const idsToDelete = Array.from(publicIds || []);
       if (urls && urls.length > 0) {
         for (const u of urls) {
@@ -463,39 +382,28 @@ class GarageController {
           success: false,
           message: "Could not determine any publicIds to delete",
         });
-      }
-
-      // Update DB depending on type
+      }
       let update = null;
-      if (type === "logo") {
-        // if deleting logo/publicId matches, unset
+      if (type === "logo") {
         update = { $unset: { logo: "" } };
       } else if (type === "coverImage") {
         update = { $unset: { coverImage: "" } };
-      } else {
-        // gallery - pull any matching urls
-        // we accept urls input; remove entries whose public_id matches any idToDelete
-        // easiest: pull by matching URLs using provided urls array
+      } else {
         if (urls && urls.length > 0) {
           update = { $pull: { gallery: { $in: urls } } };
-        } else {
-          // fallback: if client provided only publicIds, try to remove entries that include the id substring
+        } else {
           update = {
             $pull: {
               gallery: { $in: idsToDelete.map((id) => new RegExp(id)) },
             },
           };
         }
-      }
-
-      // Apply DB update
+      }
       const updatedGarage = await Garage.findOneAndUpdate(
         { _id: garage._id },
         update,
         { new: true }
-      );
-
-      // Delete resources from Cloudinary in parallel (best-effort)
+      );
 
       const deletePromises = idsToDelete.map((pid) =>
         deleteResourceFromCloudinary(pid, "image")
@@ -508,16 +416,13 @@ class GarageController {
         data: { garage: updatedGarage, deleted: idsToDelete, deleteResults },
       });
     } catch (error) {
-      console.error("Error deleting images:", error);
       res.status(500).json({
         success: false,
         message: "Error deleting images",
         error: error.message,
       });
     }
-  }
-
-  // Get garage services
+  }
   async getGarageServices(req, res) {
     try {
       const { slug } = req.params;
@@ -546,9 +451,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Add service to garage
+  }
   async addService(req, res) {
     try {
       const { slug } = req.params;
@@ -561,19 +464,14 @@ class GarageController {
         });
       }
 
-      const serviceData = { ...req.body, garage: garage._id };
-
-      // Generate a URL-friendly slug from the service name when creating
+      const serviceData = { ...req.body, garage: garage._id };
       const nameForSlug = (serviceData.name || "service").toString();
       const baseSlug = nameForSlug
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-
-      // Ensure uniqueness of slug within the same garage
+        .replace(/^-+|-+$/g, "");
       let uniqueSlug = baseSlug || "service";
-      let suffix = 0;
-      // Try up to 20 incremental suffixes, then fallback to timestamp
+      let suffix = 0;
       while (
         await GarageService.findOne({ garage: garage._id, slug: uniqueSlug })
       ) {
@@ -588,21 +486,14 @@ class GarageController {
       serviceData.slug = uniqueSlug;
 
       const service = new GarageService(serviceData);
-      await service.save();
-
-      // push reference to garage.services
+      await service.save();
       try {
         if (!Array.isArray(garage.services)) garage.services = [];
         garage.services.push(service._id);
         await garage.save();
-      } catch (err) {
-        console.warn(
-          "Failed to link added service to garage:",
-          err?.message || err
-        );
-      }
-
-      res.status(201).json({
+      } catch (e) {
+  }
+res.status(201).json({
         success: true,
         message: "Service added successfully",
         data: service,
@@ -614,9 +505,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Update service
+  }
   async updateService(req, res) {
     try {
       const { slug, serviceId } = req.params;
@@ -630,8 +519,7 @@ class GarageController {
       }
 
       const service = await GarageService.findOneAndUpdate(
-        { _id: serviceId, garage: garage._id },
-        // if name changed, ensure slug will be regenerated via pre-save
+        { _id: serviceId, garage: garage._id },
         req.body,
         { new: true, runValidators: true }
       );
@@ -655,14 +543,10 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Get single service by slug (service slug is unique per garage)
+  }
   async getServiceBySlug(req, res) {
     try {
-      const { garageSlug, serviceSlug } = req.params;
-
-      // Find garage first
+      const { garageSlug, serviceSlug } = req.params;
       const garage = await Garage.findOne({ slug: garageSlug, isActive: true });
       if (!garage) {
         return res
@@ -684,16 +568,13 @@ class GarageController {
 
       res.json({ success: true, data: service });
     } catch (error) {
-      console.error("Error fetching service by slug:", error);
       res.status(500).json({
         success: false,
         message: "Error fetching service",
         error: error.message,
       });
     }
-  }
-
-  // Delete service
+  }
   async deleteService(req, res) {
     try {
       const { slug, serviceId } = req.params;
@@ -729,9 +610,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Get garage analytics/dashboard
+  }
   async getGarageDashboard(req, res) {
     try {
       const { slug } = req.params;
@@ -742,9 +621,7 @@ class GarageController {
           success: false,
           message: "Garage not found or unauthorized",
         });
-      }
-
-      // Get services count and analytics
+      }
       const servicesCount = await GarageService.countDocuments({
         garage: garage._id,
       });
@@ -772,9 +649,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Get top rated garages
+  }
   async getTopRatedGarages(req, res) {
     try {
       const { limit = 6 } = req.query;
@@ -800,9 +675,7 @@ class GarageController {
         error: error.message,
       });
     }
-  }
-
-  // Search garages with autocomplete
+  }
   async searchGarages(req, res) {
     try {
       const { q, limit = 10 } = req.query;

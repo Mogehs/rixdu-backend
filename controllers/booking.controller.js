@@ -21,9 +21,7 @@ export const createBooking = async (req, res) => {
       email,
       notes,
       status,
-    } = req.body;
-
-    // Validate required fields
+    } = req.body;
     if (
       !doctorId ||
       !patientId ||
@@ -57,17 +55,13 @@ export const createBooking = async (req, res) => {
         success: false,
         message: "Invalid date format.",
       });
-    }
-
-    // Prevent past bookings
+    }
     if (bookingDate < new Date()) {
       return res.status(400).json({
         success: false,
         message: "Booking date must be in the future.",
       });
-    }
-
-    // Check if the time slot is already booked
+    }
     const existingBooking = await Bookings.findOne({
       doctor: doctorId,
       date: bookingDate,
@@ -97,9 +91,7 @@ export const createBooking = async (req, res) => {
       status: status || "pending",
     });
 
-    await booking.save();
-
-    // Populate the booking with doctor and patient details
+    await booking.save();
     const populatedBooking = await Bookings.findById(booking._id)
       .populate("doctor", "name email")
       .populate("patient", "name email");
@@ -131,7 +123,6 @@ export const createBooking = async (req, res) => {
       data: booking,
     });
   } catch (error) {
-    console.error("Error creating booking:", error);
     return res.status(500).json({
       success: false,
       message: "Server error while creating booking.",
@@ -143,8 +134,6 @@ export const createBooking = async (req, res) => {
 export const getBookingsByDoctor = async (req, res) => {
   try {
     const { doctorId } = req.params;
-    console.log(doctorId);
-
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       return res.status(400).json({
         success: false,
@@ -196,9 +185,7 @@ export const getBookingsByPatient = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// Get user's own bookings (for logged in patient)
+};
 export const getUserBookings = async (req, res) => {
   try {
     const patientId = req.user.id;
@@ -218,9 +205,7 @@ export const getUserBookings = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// Update booking status
+};
 export const updateBookingStatus = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -292,9 +277,7 @@ export const getAvailableSlots = async (req, res) => {
         success: false,
         message: "Invalid Listing ID.",
       });
-    }
-
-    // Accept date as "YYYY-MM-DD" and convert to Date object at midnight UTC
+    }
     let bookingDate;
     if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       bookingDate = new Date(date + "T00:00:00.000Z");
@@ -317,9 +300,7 @@ export const getAvailableSlots = async (req, res) => {
         receivedDate: date,
         parsedDate: bookingDate,
       });
-    }
-
-    // Get day of the week (0 = Sunday, 1 = Monday, etc.)
+    }
     const dayOfWeek = bookingDate.getDay();
     const dayNames = [
       "Sunday",
@@ -330,9 +311,7 @@ export const getAvailableSlots = async (req, res) => {
       "Friday",
       "Saturday",
     ];
-    const currentDay = dayNames[dayOfWeek];
-
-    // Parse working hours from doctor's listing
+    const currentDay = dayNames[dayOfWeek];
     let workingHours = null;
     try {
       const workingHoursStr = doctorListing.values?.get
@@ -342,10 +321,9 @@ export const getAvailableSlots = async (req, res) => {
       if (workingHoursStr) {
         workingHours = parseWorkingHours(workingHoursStr, currentDay);
       }
-    } catch (error) {
-      console.log("Error parsing working hours:", error);
-    }
-    const dateString =
+    } catch (e) {
+  }
+const dateString =
       date.length === 10 ? date : bookingDate.toISOString().split("T")[0];
     const bookings = await Bookings.find({
       doctor: doctorId,
@@ -356,28 +334,18 @@ export const getAvailableSlots = async (req, res) => {
           dateString,
         ],
       },
-    });
-
-    // Define base time slots
+    });
     let availableTimeSlots = [];
 
-    if (workingHours && !workingHours.closed) {
-      // Generate slots based on working hours
+    if (workingHours && !workingHours.closed) {
       availableTimeSlots = generateSlotsFromWorkingHours(workingHours);
-    } else {
-      // Default slots if no working hours or day is closed
+    } else {
       availableTimeSlots = [];
-    }
-
-    // Get booked time slots
-    const bookedSlots = bookings.map((booking) => booking.time);
-
-    // Filter out booked slots to get available slots
+    }
+    const bookedSlots = bookings.map((booking) => booking.time);
     const availableSlots = availableTimeSlots.filter(
       (slot) => !bookedSlots.includes(slot)
-    );
-
-    // Create slots with availability status
+    );
     const slotsWithStatus = availableTimeSlots.map((slot) => ({
       time: slot,
       available: !bookedSlots.includes(slot),
@@ -401,19 +369,13 @@ export const getAvailableSlots = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-// Helper function to parse working hours for a specific day
+};
 const parseWorkingHours = (workingHoursStr, day) => {
   try {
     if (!workingHoursStr) {
       return getDefaultWorkingHours(day);
-    }
-
-    // Handle different day patterns
-    const dayAbbrev = day.substring(0, 3).toLowerCase();
-
-    // Check for specific day patterns
+    }
+    const dayAbbrev = day.substring(0, 3).toLowerCase();
     if (day === "Friday") {
       const friMatch = workingHoursStr.match(/fri[^)]*\(([^)]+)\)/i);
       if (friMatch) {
@@ -429,13 +391,10 @@ const parseWorkingHours = (workingHoursStr, day) => {
       if (weekendMatch) {
         const timeStr = weekendMatch[1];
         return parseTimeRange(timeStr);
-      } else {
-        // If weekend is not mentioned, assume closed
+      } else {
         return { closed: true, startTime: null, endTime: null };
       }
-    }
-
-    // For Monday-Thursday
+    }
     if (["Monday", "Tuesday", "Wednesday", "Thursday"].includes(day)) {
       const monThuMatch = workingHoursStr.match(/mon-thu[^)]*\(([^)]+)\)/i);
       if (monThuMatch) {
@@ -446,12 +405,9 @@ const parseWorkingHours = (workingHoursStr, day) => {
 
     return getDefaultWorkingHours(day);
   } catch (error) {
-    console.log("Error in parseWorkingHours:", error);
     return getDefaultWorkingHours(day);
   }
-};
-
-// Helper function to parse time range like "9am-5pm"
+};
 const parseTimeRange = (timeStr) => {
   try {
     if (!timeStr || timeStr.toLowerCase().includes("closed")) {
@@ -466,9 +422,7 @@ const parseTimeRange = (timeStr) => {
       const endPeriod = timeMatch[4].toLowerCase();
 
       let startTime24 = startHour;
-      let endTime24 = endHour;
-
-      // Convert to 24-hour format
+      let endTime24 = endHour;
       if (startPeriod.includes("p") && startHour !== 12) {
         startTime24 += 12;
       } else if (startPeriod.includes("a") && startHour === 12) {
@@ -492,9 +446,7 @@ const parseTimeRange = (timeStr) => {
   } catch {
     return { closed: true, startTime: null, endTime: null };
   }
-};
-
-// Helper function to get default working hours
+};
 const getDefaultWorkingHours = (day) => {
   if (day === "Friday") {
     return { closed: false, startTime: 9, endTime: 17 }; // 9 AM to 5 PM (same as other weekdays)
@@ -503,9 +455,7 @@ const getDefaultWorkingHours = (day) => {
   } else {
     return { closed: false, startTime: 9, endTime: 17 }; // 9 AM to 5 PM
   }
-};
-
-// Helper function to generate time slots from working hours
+};
 const generateSlotsFromWorkingHours = (workingHours) => {
   if (workingHours.closed) {
     return [];
@@ -514,8 +464,7 @@ const generateSlotsFromWorkingHours = (workingHours) => {
   const slots = [];
   const { startTime, endTime } = workingHours;
 
-  for (let hour = startTime; hour < endTime; hour++) {
-    // Skip lunch hour (12 PM)
+  for (let hour = startTime; hour < endTime; hour++) {
     if (hour === 12) continue;
 
     let timeStr;
@@ -533,9 +482,7 @@ const generateSlotsFromWorkingHours = (workingHours) => {
   }
 
   return slots;
-};
-
-// Check availability for multiple dates (for calendar display)
+};
 export const checkDateAvailability = async (req, res) => {
   try {
     const { doctorId, startDate, endDate } = req.query;
@@ -574,13 +521,9 @@ export const checkDateAvailability = async (req, res) => {
     }
 
     const dateAvailability = {};
-    const currentDate = new Date(start);
-
-    // Loop through each date in the range
+    const currentDate = new Date(start);
     while (currentDate <= end) {
-      const dateKey = currentDate.toISOString().split("T")[0];
-
-      // Get day of the week
+      const dateKey = currentDate.toISOString().split("T")[0];
       const dayOfWeek = currentDate.getDay();
       const dayNames = [
         "Sunday",
@@ -591,9 +534,7 @@ export const checkDateAvailability = async (req, res) => {
         "Friday",
         "Saturday",
       ];
-      const currentDay = dayNames[dayOfWeek];
-
-      // Check if doctor works on this day
+      const currentDay = dayNames[dayOfWeek];
       let workingHours = null;
       try {
         const workingHoursStr = doctorListing.values?.get
@@ -603,15 +544,10 @@ export const checkDateAvailability = async (req, res) => {
         if (workingHoursStr) {
           workingHours = parseWorkingHours(workingHoursStr, currentDay);
         }
-      } catch (error) {
-        console.log("Error parsing working hours:", error);
-      }
-
-      if (workingHours && !workingHours.closed) {
-        // Generate slots for this day
-        const availableTimeSlots = generateSlotsFromWorkingHours(workingHours);
-
-        // Get existing bookings for this date
+      } catch (e) {
+  }
+if (workingHours && !workingHours.closed) {
+        const availableTimeSlots = generateSlotsFromWorkingHours(workingHours);
         const bookings = await Bookings.find({
           doctor: doctorId,
           date: currentDate,
@@ -629,17 +565,14 @@ export const checkDateAvailability = async (req, res) => {
           totalSlots: availableTimeSlots.length,
           workingDay: true,
         };
-      } else {
-        // Doctor doesn't work on this day
+      } else {
         dateAvailability[dateKey] = {
           hasSlots: false,
           slotsCount: 0,
           totalSlots: 0,
           workingDay: false,
         };
-      }
-
-      // Move to next date
+      }
       currentDate.setDate(currentDate.getDate() + 1);
     }
 

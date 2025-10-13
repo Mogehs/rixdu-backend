@@ -25,6 +25,11 @@ import bookingRoutes from "./routes/bookings.routes.js";
 import garageRoutes from "./routes/garage.routes.js";
 import pricePlanRoutes from "./routes/pricePlan.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
+import subscriptionRoutes from "./routes/subscription.routes.js";
+import verificationRoutes from "./routes/verification.routes.js";
+import stripeRoutes from "./routes/stripe.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
+import { handleUploadError } from "./middleware/verification-upload.middleware.js";
 import errorHandler, { notFound } from "./middleware/error.middleware.js";
 import logger, { httpLogger } from "./utils/logger.js";
 import performanceMonitor from "./middleware/performance.middleware.js";
@@ -91,6 +96,10 @@ if (
 
   app.use(helmet());
   app.use(compression());
+
+  // Handle Stripe webhook before JSON parsing (needs raw body)
+  app.use("/api/v1/stripe/webhook", express.raw({ type: "application/json" }));
+
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ extended: true, limit: "1mb" }));
   app.use(cookieParser());
@@ -181,6 +190,10 @@ if (
   app.use(`${apiVersion}/garages`, garageRoutes);
   app.use(`${apiVersion}/price-plans`, pricePlanRoutes);
   app.use(`${apiVersion}/payments`, paymentRoutes);
+  app.use(`${apiVersion}/subscriptions`, subscriptionRoutes);
+  app.use(`${apiVersion}/verification`, verificationRoutes);
+  app.use(`${apiVersion}/stripe`, stripeRoutes);
+  app.use(`${apiVersion}/admin`, adminRoutes);
 
   app.get("/api/", (_req, res) => {
     res.json({
@@ -206,6 +219,7 @@ if (
     });
   });
 
+  app.use(handleUploadError);
   app.use(notFound);
   app.use(errorHandler);
 

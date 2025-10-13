@@ -24,8 +24,7 @@ const invalidateStoreCache = async (storeId = null, storeSlug = null) => {
     }
 
     await redis.del(...keysToDelete);
-  } catch (error) {
-    console.warn("Cache invalidation error:", error.message);
+  } catch (e) {
   }
 };
 
@@ -58,7 +57,6 @@ export const createStore = async (req, res) => {
       data: store,
     });
   } catch (error) {
-    console.error(`Error creating store: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error creating store",
@@ -106,11 +104,9 @@ export const getStores = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    const stores = await Store.findAllStores();
+    } catch (e) {
+  }
+const stores = await Store.findAllStores();
 
     if (isRootRequest) {
       const storesWithCategories = await Promise.all(
@@ -208,15 +204,12 @@ export const getStores = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 900, responseString);
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     return res.status(200).json(responseData);
   } catch (error) {
-    console.error(`Error fetching stores: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching stores",
@@ -250,11 +243,9 @@ export const getStore = async (req, res) => {
         res.set("Cache-Control", "private, max-age=0, must-revalidate");
         return res.status(200).json(responseData);
       }
-    } catch (cacheError) {
-      console.warn("Redis cache read error:", cacheError.message);
-    }
-
-    let store;
+    } catch (e) {
+  }
+let store;
     if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
       store = await Store.findById(idOrSlug).lean();
     } else {
@@ -282,15 +273,12 @@ export const getStore = async (req, res) => {
 
     try {
       await redis.setex(cacheKey, 1800, responseString);
-    } catch (cacheError) {
-      console.warn("Redis cache write error:", cacheError.message);
-    }
-
-    res.set("ETag", etag);
+    } catch (e) {
+  }
+res.set("ETag", etag);
     res.set("Cache-Control", "private, max-age=0, must-revalidate");
     return res.status(200).json(responseData);
   } catch (error) {
-    console.error(`Error fetching store: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error fetching store",
@@ -358,7 +346,6 @@ export const updateStore = async (req, res) => {
       iconUpdated,
     });
   } catch (error) {
-    console.error(`Error updating store: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error updating store",
@@ -411,7 +398,6 @@ export const deleteStore = async (req, res) => {
       message: "Store deleted successfully",
     });
   } catch (error) {
-    console.error(`Error deleting store: ${error.message}`);
     return res.status(500).json({
       success: false,
       message: "Server error deleting store",
