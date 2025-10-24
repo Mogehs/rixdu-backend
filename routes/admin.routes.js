@@ -12,7 +12,31 @@ router.get(
   authorize("admin"),
   async (req, res) => {
     try {
-      // Get all users with their latest subscription
+      // Get pagination parameters
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+      const skip = (page - 1) * limit;
+
+      // Calculate statistics (total counts)
+      const totalUsers = await User.countDocuments();
+      const subscriptions = await Subscription.find({});
+
+      const stats = {
+        totalUsers,
+        activeSubscriptions: subscriptions.filter((s) => s.status === "active")
+          .length,
+        trialUsers: subscriptions.filter((s) => s.planType === "trial").length,
+        premiumUsers: subscriptions.filter((s) => s.planType === "premium")
+          .length,
+        expiredSubscriptions: subscriptions.filter(
+          (s) => s.status === "expired"
+        ).length,
+        totalRevenue: subscriptions
+          .filter((s) => s.planType === "premium" && s.status === "active")
+          .reduce((total, s) => total + (s.price || 0), 0),
+      };
+
+      // Get paginated users with their latest subscription
       const users = await User.aggregate([
         {
           $lookup: {
@@ -45,6 +69,7 @@ router.get(
             name: 1,
             email: 1,
             createdAt: 1,
+            documentVerification: 1,
             subscription: {
               _id: "$subscription._id",
               planType: "$subscription.planType",
@@ -60,31 +85,28 @@ router.get(
         {
           $sort: { createdAt: -1 },
         },
+        {
+          $skip: skip,
+        },
+        {
+          $limit: limit,
+        },
       ]);
 
-      // Calculate statistics
-      const totalUsers = await User.countDocuments();
-      const subscriptions = await Subscription.find({});
-
-      const stats = {
-        totalUsers,
-        activeSubscriptions: subscriptions.filter((s) => s.status === "active")
-          .length,
-        trialUsers: subscriptions.filter((s) => s.planType === "trial").length,
-        premiumUsers: subscriptions.filter((s) => s.planType === "premium")
-          .length,
-        expiredSubscriptions: subscriptions.filter(
-          (s) => s.status === "expired"
-        ).length,
-        totalRevenue: subscriptions
-          .filter((s) => s.planType === "premium" && s.status === "active")
-          .reduce((total, s) => total + (s.price || 0), 0),
-      };
+      // Calculate pagination info
+      const totalPages = Math.ceil(totalUsers / limit);
 
       res.status(200).json({
         success: true,
         users,
         stats,
+        pagination: {
+          page,
+          pages: totalPages,
+          limit,
+          total: totalUsers,
+          hasMore: page < totalPages,
+        },
       });
     } catch (error) {
       console.error("Get users subscriptions error:", error);

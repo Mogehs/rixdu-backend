@@ -241,6 +241,11 @@ export const createListing = async (req, res) => {
       });
     }
 
+    // Get user's active subscription to set premium status
+    const activeSubscription = await Subscription.findActiveSubscription(
+      req.user.id
+    );
+
     const category = await Category.findById(categoryId).lean();
     if (!category) {
       return res.status(404).json({
@@ -406,7 +411,8 @@ export const createListing = async (req, res) => {
       transformedValues.get("title") || transformedValues.get("name");
     const slug = await generateUniqueSlug(titleValue, categoryPath, categoryId);
 
-    const listing = await Listing.create({
+    // Prepare listing data with premium/subscription status
+    const listingData = {
       storeId,
       categoryId,
       categoryPath,
@@ -419,7 +425,20 @@ export const createListing = async (req, res) => {
         : isHealthCareStore
         ? "healthcare"
         : "others",
-    });
+    };
+
+    // If user has active subscription, mark listing as premium
+    if (activeSubscription) {
+      listingData.isPremium = true;
+      listingData.plan = "premium";
+      listingData.paymentStatus = "succeeded";
+      // Set plan expiration to match subscription end date
+      if (activeSubscription.endDate) {
+        listingData.planExpiresAt = activeSubscription.endDate;
+      }
+    }
+
+    const listing = await Listing.create(listingData);
     const categoryNames = await Category.find({
       _id: { $in: categoryPath },
     })
@@ -588,7 +607,10 @@ export const getListings = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     sortObj[sort] = order === "desc" ? -1 : 1;
     const projection = {};
     if (fields) {
@@ -1153,7 +1175,10 @@ export const getJobsListings = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     sortObj[sort] = order === "desc" ? -1 : 1;
     const projection = {};
     if (fields) {
@@ -1315,7 +1340,10 @@ export const getHealthcareListingsByCategory = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     if (sort === "verified") {
       sortObj["values.verified"] = order === "desc" ? -1 : 1;
       sortObj["createdAt"] = -1;
@@ -1482,7 +1510,10 @@ export const getHealthcareListings = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     if (sort === "verified") {
       sortObj["values.verified"] = order === "desc" ? -1 : 1;
       sortObj["createdAt"] = -1;
@@ -2024,6 +2055,8 @@ export const searchListings = async (req, res) => {
         },
         {
           $sort: {
+            isPremium: -1, // Premium listings first
+            isFeatured: -1, // Then featured listings
             effectivePrice: priceOrder,
             createdAt: -1,
           },
@@ -2081,16 +2114,20 @@ export const searchListings = async (req, res) => {
 
     switch (sortParam) {
       case "Popular":
-        sortObj = { views: -1, createdAt: -1 };
+        sortObj = { isPremium: -1, isFeatured: -1, views: -1, createdAt: -1 };
         break;
       case "newest":
-        sortObj = { createdAt: -1 };
+        sortObj = { isPremium: -1, isFeatured: -1, createdAt: -1 };
         break;
       case "oldest":
-        sortObj = { createdAt: 1 };
+        sortObj = { isPremium: -1, isFeatured: -1, createdAt: 1 };
         break;
       default:
-        sortObj = { [sortParam]: order === "desc" ? -1 : 1 };
+        sortObj = {
+          isPremium: -1,
+          isFeatured: -1,
+          [sortParam]: order === "desc" ? -1 : 1,
+        };
     }
     const projection = {};
     if (fields) {
@@ -2249,6 +2286,7 @@ export const getListingsByCity = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
     const listings = await Listing.find(query)
+      .sort({ isPremium: -1, isFeatured: -1, createdAt: -1 })
       .skip(skip)
       .limit(Number(limit))
       .populate("categoryId", "name slug icon")
@@ -2350,7 +2388,10 @@ export const getListingsByStore = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     sortObj[sort] = order === "desc" ? -1 : 1;
     const projection = {};
     if (fields) {
@@ -2610,7 +2651,10 @@ export const getVehicleListings = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     sortObj[sort] = order === "desc" ? -1 : 1;
     const projection = {};
     if (fields) {
@@ -2828,7 +2872,10 @@ export const getVehicleListingsAdvanced = async (req, res) => {
     const pageNum = Math.max(1, Number(page) || 1);
     const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
-    const sortObj = {};
+    const sortObj = {
+      isPremium: -1, // Premium listings first
+      isFeatured: -1, // Then featured listings
+    };
     sortObj[sort] = order === "desc" ? -1 : 1;
     const projection = {};
     if (fields) {

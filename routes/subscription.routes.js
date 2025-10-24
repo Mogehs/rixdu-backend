@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getSubscriptionStatus,
+  refreshSubscriptionStatus,
   startFreeTrial,
   createPremiumSubscription,
   confirmPremiumSubscription,
@@ -20,6 +21,7 @@ router.use(protect);
 
 // User subscription routes
 router.get("/status", getSubscriptionStatus);
+router.post("/refresh", refreshSubscriptionStatus);
 router.get("/history", getSubscriptionHistory);
 router.get("/check-eligibility", checkListingEligibility);
 router.post("/trial/start", startFreeTrial);

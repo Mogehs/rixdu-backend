@@ -3,6 +3,7 @@ import {
   submitVerification,
   getVerificationStatus,
   getPendingVerifications,
+  getAllVerifications,
   reviewVerification,
   getVerificationDetails,
 } from "../controllers/verification.controller.js";
@@ -16,6 +17,7 @@ router.post("/submit", protect, verificationUpload, submitVerification);
 router.get("/status", protect, getVerificationStatus);
 
 // Admin routes
+router.get("/all", protect, authorize("admin"), getAllVerifications);
 router.get("/pending", protect, authorize("admin"), getPendingVerifications);
 router.put("/review/:userId", protect, authorize("admin"), reviewVerification);
 router.get(

@@ -18,7 +18,14 @@ export const getSubscriptionStatus = async (req, res) => {
       });
     }
 
+    console.log(`📊 Getting subscription status for user: ${userId}`);
     const subscriptionStatus = await user.getSubscriptionStatus();
+    console.log(`📊 Subscription status result:`, {
+      status: subscriptionStatus.status,
+      planType: subscriptionStatus.planType,
+      isActive: subscriptionStatus.isActive,
+      cancelledAt: subscriptionStatus.cancelledAt,
+    });
 
     res.status(200).json({
       success: true,
@@ -29,6 +36,197 @@ export const getSubscriptionStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error fetching subscription status",
+    });
+  }
+};
+
+// Force refresh subscription status from Stripe
+export const refreshSubscriptionStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all active Stripe subscriptions for this user
+    const user = await User.findById(userId);
+    if (!user || !user.stripeCustomerId) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found or no Stripe customer ID",
+      });
+    }
+
+    // Get subscriptions from Stripe
+    const stripeSubscriptions = await stripeClient.subscriptions.list({
+      customer: user.stripeCustomerId,
+      status: "all",
+      limit: 10,
+    });
+
+    console.log(
+      `Found ${stripeSubscriptions.data.length} Stripe subscriptions for user ${userId}`
+    );
+
+    // Sync each subscription (active, cancelled, etc.)
+    for (const stripeSubscription of stripeSubscriptions.data) {
+      console.log(
+        `Syncing Stripe subscription: ${stripeSubscription.id} - Status: ${stripeSubscription.status}`
+      );
+
+      let dbSubscription = await Subscription.findOne({
+        stripeSubscriptionId: stripeSubscription.id,
+      });
+
+      if (stripeSubscription.status === "active") {
+        if (!dbSubscription) {
+          console.log("Creating missing database subscription record");
+
+          const endDate = stripeSubscription.current_period_end
+            ? new Date(stripeSubscription.current_period_end * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+          const startDate = stripeSubscription.current_period_start
+            ? new Date(stripeSubscription.current_period_start * 1000)
+            : new Date();
+
+          // Get price information
+          let price = 27;
+          let currency = "AED";
+          let stripePriceId = null;
+
+          if (stripeSubscription.items.data[0]?.price?.id) {
+            try {
+              const stripePrice = await stripeClient.prices.retrieve(
+                stripeSubscription.items.data[0].price.id
+              );
+              price = stripePrice.unit_amount / 100;
+              currency = stripePrice.currency.toUpperCase();
+              stripePriceId = stripePrice.id;
+            } catch (priceError) {
+              console.error("Error retrieving price:", priceError);
+            }
+          }
+
+          dbSubscription = new Subscription({
+            userId: userId,
+            planType: "premium",
+            status: "active",
+            paymentStatus: "paid",
+            startDate: startDate,
+            endDate: endDate,
+            currentPeriodStart: startDate,
+            currentPeriodEnd: endDate,
+            price: price,
+            currency: currency,
+            stripeSubscriptionId: stripeSubscription.id,
+            stripeCustomerId: stripeSubscription.customer,
+            stripePriceId: stripePriceId,
+            autoRenew: !stripeSubscription.cancel_at_period_end,
+            activatedAt: new Date(),
+          });
+
+          await dbSubscription.save();
+          console.log("Database subscription created and synced");
+        } else {
+          // Update existing subscription, but respect cancellation status
+          console.log("Updating existing subscription...");
+
+          // Check if Stripe subscription is set to cancel at period end
+          if (stripeSubscription.cancel_at_period_end) {
+            console.log(
+              "Stripe subscription has cancel_at_period_end=true, keeping cancelled status"
+            );
+            // Keep the cancelled status in database if it's already cancelled
+            if (dbSubscription.status === "cancelled") {
+              console.log(
+                "Database subscription already cancelled, maintaining status"
+              );
+              dbSubscription.autoRenew = false;
+            } else {
+              // If not yet marked as cancelled in DB, mark it now
+              console.log(
+                "Marking database subscription as cancelled due to cancel_at_period_end"
+              );
+              dbSubscription.status = "cancelled";
+              dbSubscription.autoRenew = false;
+              dbSubscription.cancelledAt = new Date();
+            }
+          } else if (dbSubscription.status !== "active") {
+            console.log("Updating existing subscription to active");
+            dbSubscription.status = "active";
+            dbSubscription.paymentStatus = "paid";
+            dbSubscription.autoRenew = true;
+          }
+
+          // Always update period information
+          if (stripeSubscription.current_period_end) {
+            dbSubscription.currentPeriodEnd = new Date(
+              stripeSubscription.current_period_end * 1000
+            );
+            dbSubscription.endDate = new Date(
+              stripeSubscription.current_period_end * 1000
+            );
+          }
+
+          await dbSubscription.save();
+          console.log("Database subscription updated");
+        }
+      } else if (
+        stripeSubscription.status === "canceled" ||
+        stripeSubscription.status === "cancelled"
+      ) {
+        // Handle cancelled subscriptions
+        if (dbSubscription && dbSubscription.status !== "cancelled") {
+          console.log(
+            `Updating subscription ${stripeSubscription.id} to cancelled in database`
+          );
+          dbSubscription.status = "cancelled";
+          dbSubscription.autoRenew = false;
+          dbSubscription.cancelledAt = new Date();
+
+          // Set end date to when it was cancelled or current period end
+          if (stripeSubscription.canceled_at) {
+            dbSubscription.endDate = new Date(
+              stripeSubscription.canceled_at * 1000
+            );
+          } else if (stripeSubscription.current_period_end) {
+            dbSubscription.endDate = new Date(
+              stripeSubscription.current_period_end * 1000
+            );
+          }
+
+          await dbSubscription.save();
+          console.log("Database subscription updated to cancelled");
+        }
+      } else if (
+        stripeSubscription.status === "incomplete_expired" ||
+        stripeSubscription.status === "past_due"
+      ) {
+        // Handle expired/past due subscriptions
+        if (dbSubscription && dbSubscription.status !== "expired") {
+          console.log(
+            `Updating subscription ${stripeSubscription.id} to expired in database`
+          );
+          dbSubscription.status = "expired";
+          dbSubscription.autoRenew = false;
+
+          await dbSubscription.save();
+          console.log("Database subscription updated to expired");
+        }
+      }
+    }
+
+    // Get updated subscription status
+    const subscriptionStatus = await user.getSubscriptionStatus();
+
+    res.status(200).json({
+      success: true,
+      message: "Subscription status refreshed successfully",
+      data: subscriptionStatus,
+    });
+  } catch (error) {
+    console.error("Refresh subscription status error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error refreshing subscription status",
     });
   }
 };
@@ -417,14 +615,70 @@ export const confirmPremiumSubscription = async (req, res) => {
     // If subscription is now active, ensure our database is updated (fallback to webhook)
     if (finalSubscription.status === "active") {
       try {
-        const dbSubscription = await Subscription.findOne({
+        let dbSubscription = await Subscription.findOne({
           stripeSubscriptionId: subscriptionId,
         });
 
-        if (dbSubscription && dbSubscription.status !== "active") {
-          console.log("Updating database subscription to active (fallback)");
+        if (!dbSubscription) {
+          // Create new subscription record if it doesn't exist
+          console.log("Creating new database subscription record (fallback)");
+
+          const endDate = finalSubscription.current_period_end
+            ? new Date(finalSubscription.current_period_end * 1000)
+            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days fallback
+
+          const startDate = finalSubscription.current_period_start
+            ? new Date(finalSubscription.current_period_start * 1000)
+            : new Date();
+
+          // Get price information
+          let price = 27; // Default AED 27
+          let currency = "AED";
+          let stripePriceId = null;
+
+          if (finalSubscription.items.data[0]?.price?.id) {
+            try {
+              const stripePrice = await stripeClient.prices.retrieve(
+                finalSubscription.items.data[0].price.id
+              );
+              price = stripePrice.unit_amount / 100; // Convert fils to AED
+              currency = stripePrice.currency.toUpperCase();
+              stripePriceId = stripePrice.id;
+            } catch (priceError) {
+              console.error(
+                "Error retrieving price for new subscription:",
+                priceError
+              );
+            }
+          }
+
+          dbSubscription = new Subscription({
+            userId: userId,
+            planType: "premium",
+            status: "active",
+            paymentStatus: "paid",
+            startDate: startDate,
+            endDate: endDate,
+            currentPeriodStart: startDate,
+            currentPeriodEnd: endDate,
+            price: price,
+            currency: currency,
+            stripeSubscriptionId: subscriptionId,
+            stripeCustomerId: finalSubscription.customer,
+            stripePriceId: stripePriceId,
+            autoRenew: !finalSubscription.cancel_at_period_end,
+            activatedAt: new Date(),
+          });
+
+          await dbSubscription.save();
+          console.log("New database subscription created successfully");
+        } else if (dbSubscription.status !== "active") {
+          console.log(
+            "Updating existing database subscription to active (fallback)"
+          );
           dbSubscription.status = "active";
           dbSubscription.paymentStatus = "paid";
+
           // Update period dates with validation
           if (finalSubscription.current_period_start) {
             dbSubscription.currentPeriodStart = new Date(
@@ -464,7 +718,9 @@ export const confirmPremiumSubscription = async (req, res) => {
             dbSubscription.endDate = fallbackDate;
             dbSubscription.currentPeriodEnd = fallbackDate;
           }
+
           dbSubscription.activatedAt = dbSubscription.activatedAt || new Date();
+          dbSubscription.autoRenew = !finalSubscription.cancel_at_period_end;
 
           // Update price if missing
           if (!dbSubscription.price || dbSubscription.price === 0) {
@@ -493,7 +749,7 @@ export const confirmPremiumSubscription = async (req, res) => {
           console.log("Database subscription updated to active");
         }
       } catch (dbError) {
-        console.error("Error updating database subscription:", dbError);
+        console.error("Error handling database subscription:", dbError);
         // Don't fail the request if database update fails - webhook will handle it
       }
     }
@@ -524,37 +780,63 @@ export const cancelSubscription = async (req, res) => {
     const userId = req.user.id;
     const { reason } = req.body;
 
+    console.log(
+      `🚫 Processing cancellation request for user: ${userId}, reason: ${reason}`
+    );
+
     const activeSubscription = await Subscription.findActiveSubscription(
       userId
     );
 
     if (!activeSubscription) {
+      console.log(`❌ No active subscription found for user: ${userId}`);
       return res.status(404).json({
         success: false,
         message: "No active subscription found",
       });
     }
 
-    // If it's a premium subscription, cancel in Stripe
+    console.log(
+      `📋 Found active subscription: ${activeSubscription._id}, planType: ${activeSubscription.planType}`
+    );
+
+    // If it's a premium subscription, update in Stripe first
     if (
       activeSubscription.planType === "premium" &&
       activeSubscription.stripeSubscriptionId
     ) {
-      await stripeClient.subscriptions.update(
+      console.log(
+        `🔄 Updating Stripe subscription: ${activeSubscription.stripeSubscriptionId}`
+      );
+
+      const stripeUpdate = await stripeClient.subscriptions.update(
         activeSubscription.stripeSubscriptionId,
         {
           cancel_at_period_end: true,
         }
       );
+
+      console.log(
+        `✅ Stripe subscription updated - cancel_at_period_end: ${stripeUpdate.cancel_at_period_end}`
+      );
     }
 
-    // Cancel in our database
+    // Update in our database immediately
+    console.log(`💾 Cancelling subscription in database...`);
     await activeSubscription.cancel(reason);
+
+    // Reload the subscription to get updated data
+    const updatedSubscription = await Subscription.findById(
+      activeSubscription._id
+    );
+    console.log(
+      `✅ Database updated - status: ${updatedSubscription.status}, cancelledAt: ${updatedSubscription.cancelledAt}`
+    );
 
     res.status(200).json({
       success: true,
       message: "Subscription cancelled successfully",
-      data: activeSubscription,
+      data: updatedSubscription,
     });
   } catch (error) {
     console.error("Cancel subscription error:", error);
@@ -670,6 +952,7 @@ export const getAllSubscriptions = async (req, res) => {
 
 export default {
   getSubscriptionStatus,
+  refreshSubscriptionStatus,
   startFreeTrial,
   createPremiumSubscription,
   confirmPremiumSubscription,

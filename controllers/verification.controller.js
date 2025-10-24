@@ -18,13 +18,15 @@ export const submitVerification = async (req, res) => {
       emiratesIdNumber,
       businessLicenseNumber,
       businessName,
-    } = req.body;
+    } = req.body;
+
     if (!["individual", "business"].includes(verificationType)) {
       return res.status(400).json({
         success: false,
         message: "Verification type must be either 'individual' or 'business'",
       });
-    }
+    }
+
     if (!isValidUAEPhoneNumber(contactNumber)) {
       return res.status(400).json({
         success: false,
@@ -39,8 +41,9 @@ export const submitVerification = async (req, res) => {
         success: false,
         message: "User not found",
       });
-    }
-    if (!user.canSubmitVerification()) {
+    }
+
+    if (!user.canSubmitVerification()) {
       if (user.documentVerification.paymentStatus !== "paid") {
         return res.status(400).json({
           success: false,
@@ -54,18 +57,20 @@ export const submitVerification = async (req, res) => {
         success: false,
         message: `Cannot submit verification. Current status: ${user.documentVerification.status}`,
       });
-    }
+    }
+
     const documents = {};
 
-    if (verificationType === "individual") {
+    if (verificationType === "individual") {
       if (!emiratesIdNumber || !isValidEmiratesIdFormat(emiratesIdNumber)) {
         return res.status(400).json({
           success: false,
           message:
             "Valid Emirates ID number is required for individual verification (format: 784-YYYY-XXXXXXX-X)",
         });
-      }
-      if (req.files && req.files.emiratesIdFront && req.files.emiratesIdBack) {
+      }
+
+      if (req.files && req.files.emiratesIdFront && req.files.emiratesIdBack) {
         const frontImageResult = await uploadToCloudinary(
           req.files.emiratesIdFront[0].buffer,
           req.files.emiratesIdFront[0].originalname,
@@ -83,14 +88,14 @@ export const submitVerification = async (req, res) => {
           backImage: backImageResult.secure_url,
           idNumber: formatEmiratesId(emiratesIdNumber),
         };
-      } else {
+      } else {
         documents.emiratesId = {
           frontImage: null,
           backImage: null,
           idNumber: formatEmiratesId(emiratesIdNumber),
         };
       }
-    } else if (verificationType === "business") {
+    } else if (verificationType === "business") {
       if (!emiratesIdNumber || !isValidEmiratesIdFormat(emiratesIdNumber)) {
         return res.status(400).json({
           success: false,
@@ -115,13 +120,14 @@ export const submitVerification = async (req, res) => {
           success: false,
           message: "Business name is required for business verification",
         });
-      }
+      }
+
       if (
         req.files &&
         req.files.emiratesIdFront &&
         req.files.emiratesIdBack &&
         req.files.businessLicense
-      ) {
+      ) {
         const frontImageResult = await uploadToCloudinary(
           req.files.emiratesIdFront[0].buffer,
           req.files.emiratesIdFront[0].originalname,
@@ -132,7 +138,8 @@ export const submitVerification = async (req, res) => {
           req.files.emiratesIdBack[0].buffer,
           req.files.emiratesIdBack[0].originalname,
           "verification/emirates-id"
-        );
+        );
+
         const businessLicenseResult = await uploadToCloudinary(
           req.files.businessLicense[0].buffer,
           req.files.businessLicense[0].originalname,
@@ -150,7 +157,7 @@ export const submitVerification = async (req, res) => {
           licenseNumber: businessLicenseNumber.trim(),
           businessName: businessName.trim(),
         };
-      } else {
+      } else {
         documents.emiratesId = {
           frontImage: null,
           backImage: null,
@@ -163,7 +170,8 @@ export const submitVerification = async (req, res) => {
           businessName: businessName.trim(),
         };
       }
-    }
+    }
+
     user.documentVerification = {
       status: "pending",
       type: verificationType,
@@ -279,17 +287,66 @@ export const getPendingVerifications = async (req, res) => {
   }
 };
 
+export const getAllVerifications = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const skip = (page - 1) * limit;
+    const status = req.query.status; // optional filter by status
+
+    // Build query - only include users who have submitted verification
+    const query = {
+      "documentVerification.status": { $exists: true, $ne: "unverified" },
+    };
+
+    // If status filter is provided, use it
+    if (status && ["pending", "verified", "rejected"].includes(status)) {
+      query["documentVerification.status"] = status;
+    }
+
+    const users = await User.find(query)
+      .select("name email phoneNumber documentVerification")
+      .sort({ "documentVerification.submittedAt": -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await User.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      total,
+      pagination: {
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+        hasMore: skip + users.length < total,
+      },
+      data: users,
+    });
+  } catch (error) {
+    logger.error("Error getting all verifications:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching verifications",
+    });
+  }
+};
+
 export const reviewVerification = async (req, res) => {
   try {
     const { userId } = req.params;
     const { action, rejectionReason } = req.body;
-    const reviewerId = req.user.id;
+    const reviewerId = req.user.id;
+
     if (!["approve", "reject"].includes(action)) {
       return res.status(400).json({
         success: false,
         message: "Action must be either 'approve' or 'reject'",
       });
-    }
+    }
+
     if (action === "reject" && !rejectionReason) {
       return res.status(400).json({
         success: false,
@@ -303,13 +360,15 @@ export const reviewVerification = async (req, res) => {
         success: false,
         message: "User not found",
       });
-    }
+    }
+
     if (user.documentVerification.status !== "pending") {
       return res.status(400).json({
         success: false,
         message: `Cannot review verification. Current status: ${user.documentVerification.status}`,
       });
-    }
+    }
+
     if (action === "approve") {
       user.documentVerification.status = "verified";
       user.documentVerification.verifiedAt = new Date();

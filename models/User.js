@@ -278,7 +278,17 @@ UserSchema.methods.hasUsedFreeTrial = async function () {
 };
 
 UserSchema.methods.getSubscriptionStatus = async function () {
-  const subscription = await this.getActiveSubscription();
+  const Subscription = mongoose.model("Subscription");
+
+  // First check for active subscription
+  let subscription = await this.getActiveSubscription();
+
+  // If no active subscription, check for the most recent subscription (including cancelled)
+  if (!subscription) {
+    subscription = await Subscription.findOne({ userId: this._id })
+      .sort({ createdAt: -1 }) // Get the most recent subscription
+      .limit(1);
+  }
 
   if (!subscription) {
     const hasUsedTrial = await this.hasUsedFreeTrial();
@@ -291,16 +301,22 @@ UserSchema.methods.getSubscriptionStatus = async function () {
     };
   }
 
+  // Calculate if it's still active (for cancelled subscriptions that haven't ended yet)
+  const isCurrentlyActive =
+    subscription.status === "active" && subscription.endDate > new Date();
+
   return {
     status: subscription.status,
     planType: subscription.planType,
     canStartTrial: false,
-    isActive: subscription.isActive,
-    daysRemaining: subscription.daysRemaining,
+    isActive: isCurrentlyActive,
+    daysRemaining: isCurrentlyActive ? subscription.daysRemaining : 0,
     endDate: subscription.endDate,
     autoRenew: subscription.autoRenew,
     listingsCount: subscription.listingsCount,
     maxListings: subscription.maxListings,
+    cancelledAt: subscription.cancelledAt,
+    cancellationReason: subscription.cancellationReason,
   };
 };
 
