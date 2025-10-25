@@ -4,6 +4,7 @@ import { upload, resumeUpload } from "../middleware/multer.middleware.js";
 import {
   getCompleteProfile,
   getPublicProfile,
+  getPublicProfilePaginated,
   getJobProfile,
   getProfessionalProfile,
   updatePersonalProfile,
@@ -17,6 +18,11 @@ import {
 
 const router = express.Router();
 
+router.get(
+  "/public/:userId/paginated",
+  optionalAuth,
+  getPublicProfilePaginated
+);
 router.get("/public/:userId", optionalAuth, getPublicProfile);
 router.get("/search", searchUsersBySkills);
 

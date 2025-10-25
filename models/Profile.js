@@ -248,6 +248,168 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
   return profile;
 };
 
+// Method to get paginated public profile information
+ProfileSchema.statics.getPublicProfilePaginated = async function (
+  userId,
+  tab,
+  page,
+  limit,
+  categoryFilter
+) {
+  const skip = (page - 1) * limit;
+
+  // Get the basic profile info first
+  const profile = await this.findOne({ user: userId })
+    .populate("user", "name")
+    .select(
+      "public personal.avatar personal.bio personal.location personal.dateOfBirth personal.languages personal.visaStatus createdAt"
+    )
+    .lean();
+
+  if (!profile) {
+    return null;
+  }
+
+  // Initialize result object
+  const result = {
+    user: profile.user,
+    personal: profile.personal,
+    createdAt: profile.createdAt,
+    public: {
+      ads: [],
+      jobPosts: [],
+      ratings: [],
+    },
+    pagination: {
+      currentPage: page,
+      limit: limit,
+      totalItems: 0,
+      totalPages: 0,
+      hasNextPage: false,
+      hasPrevPage: page > 1,
+    },
+  };
+
+  // Get categories for ads tab
+  if (tab === "ads") {
+    const Listing = mongoose.model("Listing");
+
+    // Build query for ads
+    let adsQuery = {
+      _id: { $in: profile.public.ads },
+    };
+
+    // Apply category filter if not "all"
+    if (categoryFilter && categoryFilter !== "all") {
+      adsQuery.categoryId = categoryFilter;
+    }
+
+    // Get total count for pagination
+    const totalAds = await Listing.countDocuments(adsQuery);
+
+    // Get paginated ads
+    const ads = await Listing.find(adsQuery)
+      .populate("categoryId", "name")
+      .select("values images categoryId createdAt updatedAt slug serviceType")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    result.public.ads = ads;
+    result.pagination.totalItems = totalAds;
+    result.pagination.totalPages = Math.ceil(totalAds / limit);
+    result.pagination.hasNextPage = page < result.pagination.totalPages;
+
+    // Get all unique categories from user's ads for filter dropdown
+    const allUserAds = await Listing.find({
+      _id: { $in: profile.public.ads },
+    })
+      .populate("categoryId", "name")
+      .select("categoryId")
+      .lean();
+
+    const categories = allUserAds
+      .map((ad) => ad.categoryId)
+      .filter((cat) => cat && cat.name)
+      .reduce((unique, category) => {
+        if (!unique.some((c) => c._id.toString() === category._id.toString())) {
+          unique.push(category);
+        }
+        return unique;
+      }, []);
+
+    result.categories = categories.sort((a, b) => a.name.localeCompare(b.name));
+    result.totalAdsCount = profile.public.ads.length; // Total count without filter
+  } else if (tab === "jobPosts") {
+    const Listing = mongoose.model("Listing");
+
+    // Get total count for pagination
+    const totalJobPosts = profile.public.jobPosts.length;
+
+    // Get paginated job posts
+    const jobPosts = await Listing.find({
+      _id: { $in: profile.public.jobPosts },
+    })
+      .populate("categoryId", "name")
+      .select("values images categoryId createdAt updatedAt slug")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    result.public.jobPosts = jobPosts;
+    result.pagination.totalItems = totalJobPosts;
+    result.pagination.totalPages = Math.ceil(totalJobPosts / limit);
+    result.pagination.hasNextPage = page < result.pagination.totalPages;
+  } else if (tab === "ratings") {
+    const Rating = mongoose.model("Rating");
+
+    // Get total count for pagination
+    const totalRatings = profile.public.ratings.length;
+
+    // Get paginated ratings
+    const ratings = await Rating.find({
+      _id: { $in: profile.public.ratings },
+    })
+      .populate("reviewer", "name email")
+      .populate("reviewee", "name email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    result.public.ratings = ratings;
+    result.pagination.totalItems = totalRatings;
+    result.pagination.totalPages = Math.ceil(totalRatings / limit);
+    result.pagination.hasNextPage = page < result.pagination.totalPages;
+
+    // Calculate average rating from all ratings (not just current page)
+    if (totalRatings > 0) {
+      const allRatings = await Rating.find({
+        _id: { $in: profile.public.ratings },
+      })
+        .select("stars")
+        .lean();
+
+      const totalStars = allRatings.reduce(
+        (sum, rating) => sum + (rating.stars || 0),
+        0
+      );
+      result.averageRating = (totalStars / totalRatings).toFixed(1);
+    }
+  }
+
+  // Get counts for all tabs (to display in tab headers)
+  result.counts = {
+    ads: profile.public.ads.length,
+    jobPosts: profile.public.jobPosts.length,
+    ratings: profile.public.ratings.length,
+  };
+
+  return result;
+};
+
 // Method to get job profile
 ProfileSchema.statics.getJobProfile = async function (userId) {
   return this.findOne({ user: userId })
