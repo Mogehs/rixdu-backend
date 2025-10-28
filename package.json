@@ -12,6 +12,7 @@
     "start:full": "concurrently \"npm start\" \"npm run worker\"",
     "migrate:slugs": "node scripts/migrateSlugs.js",
     "migrate:slugs:dry-run": "node scripts/migrateSlugs.js --dry-run",
+    "swagger": "node swagger.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -41,6 +42,8 @@
     "nodemailer": "^7.0.3",
     "socket.io": "^4.8.1",
     "stripe": "^18.5.0",
+    "swagger-autogen": "^2.23.7",
+    "swagger-ui-express": "^5.0.1",
     "twilio": "^5.7.1"
   },
   "devDependencies": {
