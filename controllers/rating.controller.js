@@ -6,6 +6,9 @@ export const createRating = async (req, res) => {
   try {
     const { reviewer, reviewee, stars, message, attributes, listingId } =
       req.body;
+    console.log(req.body);
+
+    // Validation
     if (!reviewer || !reviewee || !stars || !message || !listingId) {
       return res.status(400).json({
         success: false,
@@ -14,12 +17,37 @@ export const createRating = async (req, res) => {
       });
     }
 
+    // Validate message length
+    if (message.trim().length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Review message must be at least 10 characters long",
+      });
+    }
+
+    if (message.trim().length > 500) {
+      return res.status(400).json({
+        success: false,
+        message: "Review message cannot exceed 500 characters",
+      });
+    }
+
+    // Validate stars
+    if (stars < 1 || stars > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5 stars",
+      });
+    }
+
     if (reviewer === reviewee) {
       return res.status(400).json({
         success: false,
         message: "You cannot rate yourself",
       });
-    }
+    }
+
+    // Check for existing rating
     const existingRating = await Rating.findOne({
       reviewer,
       reviewee,
@@ -30,21 +58,26 @@ export const createRating = async (req, res) => {
         success: false,
         message: "You have already rated this user for this listing",
       });
-    }
+    }
+
+    // Create rating
     const rating = await Rating.create({
       reviewer,
       reviewee,
       stars,
-      message,
+      message: message.trim(),
       listing: listingId,
       attributes: attributes || [],
-    });
+    });
+
+    // Update profile
     const revieweeProfile = await Profile.findOne({ user: reviewee });
     if (revieweeProfile) {
       revieweeProfile.public.ratings.push(rating._id);
       await revieweeProfile.save();
     }
 
+    // Populate reviewer and reviewee details
     await rating.populate([
       { path: "reviewer", select: "name" },
       { path: "reviewee", select: "name" },
@@ -56,6 +89,25 @@ export const createRating = async (req, res) => {
       data: rating,
     });
   } catch (error) {
+    console.error("Error creating rating:", error);
+
+    // Handle Mongoose validation errors
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(", "),
+      });
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "You have already rated this user for this listing",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Error creating rating",
@@ -76,7 +128,8 @@ export const getListingRatings = async (req, res) => {
         success: false,
         message: "Listing ID is required to fetch ratings.",
       });
-    }
+    }
+
     const matchStage = {
       reviewee: new mongoose.Types.ObjectId(userId),
       listing: new mongoose.Types.ObjectId(listingId),
@@ -110,8 +163,10 @@ export const getListingRatings = async (req, res) => {
           },
         },
       },
-    ]);
-    const total = await Rating.countDocuments(matchStage);
+    ]);
+
+    const total = await Rating.countDocuments(matchStage);
+
     const avgResult = await Rating.aggregate([
       { $match: matchStage },
       {

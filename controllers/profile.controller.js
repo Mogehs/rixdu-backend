@@ -10,13 +10,35 @@ export const getCompleteProfile = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
 
-    const profile = await Profile.getCompleteProfile(userId);
+    let profile = await Profile.getCompleteProfile(userId);
 
     if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: "Profile not found",
-      });
+      // Auto-create profile if it doesn't exist (safety net)
+      try {
+        const User = mongoose.model("User");
+        const userExists = await User.findById(userId);
+
+        if (userExists) {
+          await Profile.create({
+            user: userId,
+            personal: {},
+            jobProfile: {},
+            favorites: { listings: [] },
+          });
+
+          // Fetch the newly created profile
+          profile = await Profile.getCompleteProfile(userId);
+        }
+      } catch (createError) {
+        console.error("Failed to auto-create profile:", createError);
+      }
+
+      if (!profile) {
+        return res.status(404).json({
+          success: false,
+          message: "Profile not found",
+        });
+      }
     }
 
     return res.status(200).json({

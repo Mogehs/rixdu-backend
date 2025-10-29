@@ -149,10 +149,10 @@ const UserSchema = new mongoose.Schema(
 
 UserSchema.index({ email: 1 }, { unique: true, sparse: true });
 UserSchema.index({ phoneNumber: 1 }, { unique: true, sparse: true });
+UserSchema.index({ auth0Id: 1 }, { unique: true, sparse: true });
 UserSchema.index({ role: 1, createdAt: -1 });
 UserSchema.index({ createdAt: -1 });
 UserSchema.index({ email: 1, role: 1 }, { sparse: true });
-UserSchema.index({ auth0Id: 1 }, { sparse: true });
 
 UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {

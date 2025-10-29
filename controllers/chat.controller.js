@@ -22,7 +22,8 @@ export const getOrCreateChat = async (req, res) => {
         },
       })
       .populate("sender")
-      .populate("receiver");
+      .populate("receiver");
+
     if (!chat) {
       chat = new Chat({
         listing: listingId,
@@ -31,7 +32,8 @@ export const getOrCreateChat = async (req, res) => {
         type: type || "other",
       });
 
-      await chat.save();
+      await chat.save();
+
       chat = await Chat.findById(chat._id)
         .populate({
           path: "listing",
@@ -55,7 +57,8 @@ export const getChatById = async (req, res) => {
   const { chatId } = req.params;
 
   try {
-    let query = {};
+    let query = {};
+
     if (mongoose.Types.ObjectId.isValid(chatId)) {
       query._id = chatId;
     } else {
@@ -131,8 +134,9 @@ export const getUserChats = async (req, res) => {
       .sort({ lastMessageAt: -1, updatedAt: -1 });
 
     const chatsWithMetadata = await Promise.all(
-      chats.map(async (chat) => {
-        const unreadCount = await Message.countUnreadMessages(chat._id, userId);
+      chats.map(async (chat) => {
+        const unreadCount = await Message.countUnreadMessages(chat._id, userId);
+
         let lastMessage = chat.lastMessage;
         let lastMessageTime = chat.lastMessageAt;
 
@@ -158,6 +162,29 @@ export const getUserChats = async (req, res) => {
     );
 
     res.status(200).json(chatsWithMetadata);
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getUnreadCount = async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    const chats = await Chat.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+    })
+      .select("_id")
+      .lean();
+
+    let totalUnreadCount = 0;
+
+    for (const chat of chats) {
+      const unreadCount = await Message.countUnreadMessages(chat._id, userId);
+      totalUnreadCount += unreadCount;
+    }
+
+    res.status(200).json({ unreadCount: totalUnreadCount });
   } catch (error) {
     res.status(500).json({ message: "Internal server error" });
   }

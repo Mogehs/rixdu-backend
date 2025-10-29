@@ -16,6 +16,20 @@ import {
 } from "../utils/smsService.js";
 import { AuthJobService } from "../services/authJobService.js";
 
+// Simple in-memory request deduplication cache
+const recentRequests = new Map();
+const REQUEST_DEDUPE_WINDOW = 5000; // 5 seconds
+
+// Clean up old entries every minute
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamp] of recentRequests.entries()) {
+    if (now - timestamp > REQUEST_DEDUPE_WINDOW) {
+      recentRequests.delete(key);
+    }
+  }
+}, 60000);
+
 const sendTokenResponse = (user, statusCode, res) => {
   const token = user.password
     ? User.schema.methods.getSignedJwtToken.call(user)
@@ -77,6 +91,22 @@ export const sendVerificationCode = async (req, res) => {
     }
 
     const verificationMethod = phoneNumber ? "phone" : "email";
+    const requestKey = `verify_${email || phoneNumber}`;
+
+    // Check for duplicate requests within the time window
+    const lastRequestTime = recentRequests.get(requestKey);
+    if (
+      lastRequestTime &&
+      Date.now() - lastRequestTime < REQUEST_DEDUPE_WINDOW
+    ) {
+      return res.status(429).json({
+        success: false,
+        message: "Please wait before requesting another verification code",
+      });
+    }
+
+    // Mark this request
+    recentRequests.set(requestKey, Date.now());
 
     let user;
 
@@ -107,19 +137,51 @@ export const sendVerificationCode = async (req, res) => {
       const userData = {
         name: name || (email ? email.split("@")[0] : `user_${Date.now()}`),
         password: crypto.randomBytes(20).toString("hex"),
+        isVerified: false,
       };
       if (email) userData.email = email;
       if (phoneNumber) userData.phoneNumber = phoneNumber;
-      user = new User(userData);
+
+      // Use upsert with proper error handling for duplicates
+      const query = email ? { email } : { phoneNumber };
+
+      try {
+        // Try to create new user
+        user = new User(userData);
+      } catch (err) {
+        // If error, try to find existing user
+        const existingUser = await User.findOne(query);
+        if (existingUser) {
+          user = existingUser;
+        } else {
+          throw err;
+        }
+      }
     } else {
       user = await User.findById(user._id);
     }
 
     const verificationCode = user.generateVerificationToken(verificationMethod);
 
-    await user.save({ validateBeforeSave: false });
+    try {
+      await user.save({ validateBeforeSave: false });
+    } catch (saveError) {
+      // If duplicate key error, fetch the existing user and update it
+      if (saveError.code === 11000) {
+        const query = email ? { email } : { phoneNumber };
+        user = await User.findOne(query);
+        if (user) {
+          user.generateVerificationToken(verificationMethod);
+          await user.save({ validateBeforeSave: false });
+        } else {
+          throw saveError;
+        }
+      } else {
+        throw saveError;
+      }
+    }
 
-    try {
+    try {
       await AuthJobService.sendVerificationCode(
         verificationMethod,
         verificationMethod === "phone" ? user.phoneNumber : user.email,
@@ -181,13 +243,15 @@ export const sendVerificationCode = async (req, res) => {
 
 export const register = async (req, res) => {
   try {
-    let { email, password, name, phoneNumber, verificationCode } = req.body;
+    let { email, password, name, phoneNumber, verificationCode } = req.body;
+
     if (!verificationCode || !password) {
       return res.status(400).json({
         success: false,
         message: "Please provide password and verification code",
       });
-    }
+    }
+
     if (!phoneNumber && !email) {
       return res.status(400).json({
         success: false,
@@ -228,12 +292,35 @@ export const register = async (req, res) => {
     user.verificationToken = undefined;
     user.verificationExpire = undefined;
 
-    await user.save();
+    await user.save();
+
+    // Create profile synchronously to ensure it exists before user logs in
     try {
-      await AuthJobService.createUserProfile(user._id);
-    } catch (e) {
-  }
-return sendTokenResponse(user, 201, res);
+      const Profile = mongoose.model("Profile");
+      const existingProfile = await Profile.findOne({ user: user._id });
+
+      if (!existingProfile) {
+        await Profile.create({
+          user: user._id,
+          personal: {},
+          jobProfile: {},
+          favorites: { listings: [] },
+        });
+      }
+    } catch (profileError) {
+      console.error(
+        "Failed to create profile during registration:",
+        profileError
+      );
+      // Queue as fallback if sync creation fails
+      try {
+        await AuthJobService.createUserProfile(user._id);
+      } catch (e) {
+        console.error("Failed to queue profile creation:", e);
+      }
+    }
+
+    return sendTokenResponse(user, 201, res);
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -381,7 +468,7 @@ export const forgotPassword = async (req, res) => {
     const resetCode = User.schema.methods.generatePasswordResetToken.call(user);
     await user.save({ validateBeforeSave: false });
 
-    try {
+    try {
       await AuthJobService.sendPasswordResetCode(
         verificationMethod,
         verificationMethod === "phone" ? user.phoneNumber : user.email,
@@ -537,7 +624,7 @@ export const resendVerificationCode = async (req, res) => {
     const verificationCode = user.generateVerificationToken(verificationMethod);
     await user.save({ validateBeforeSave: false });
 
-    try {
+    try {
       await AuthJobService.sendVerificationCode(
         verificationMethod,
         verificationMethod === "phone" ? user.phoneNumber : user.email,
@@ -668,7 +755,8 @@ export const auth0Login = async (req, res) => {
         user.auth0Id = sub;
         user.provider = provider;
         user.isVerified = true;
-        user.verificationMethod = "auth0";
+        user.verificationMethod = "auth0";
+
         if (picture) {
           user.avatar = picture;
         }
@@ -688,41 +776,49 @@ export const auth0Login = async (req, res) => {
         role: "user",
         ...(picture && { avatar: picture }), // Add avatar if picture is provided
       });
-      await user.save();
+      await user.save();
+
+      // Create profile synchronously for immediate availability
       try {
-        await AuthJobService.createUserProfile(user._id);
-      } catch (e) {
-  }
-} else {
+        const Profile = mongoose.model("Profile");
+        await Profile.create({
+          user: user._id,
+          personal: {
+            avatar: picture || user.avatar,
+          },
+          jobProfile: {},
+          favorites: { listings: [] },
+        });
+      } catch (profileError) {
+        console.error(
+          "Failed to create profile during Auth0 login:",
+          profileError
+        );
+        // Queue as fallback if sync creation fails
+        try {
+          await AuthJobService.createUserProfile(user._id);
+        } catch (e) {
+          console.error("Failed to queue profile creation job:", e);
+        }
+      }
+    } else {
+      // Update existing user avatar if changed
       if (picture && user.avatar !== picture) {
         user.avatar = picture;
         await user.save();
-      }
-    }
-    if (picture || user.avatar) {
-      try {
-        const Profile = mongoose.model("Profile");
-        let profile = await Profile.findOne({ user: user._id });
 
-        if (!profile) {
-          profile = await Profile.create({
-            user: user._id,
-            personal: {
-              avatar: picture || user.avatar,
-            },
-            jobProfile: {},
-            favorites: { listings: [] },
-          });
-        } else {
-          if (!profile.personal) {
-            profile.personal = {};
-          }
-          profile.personal.avatar = picture || user.avatar;
-          await profile.save();
+        // Update profile avatar if profile exists
+        try {
+          const Profile = mongoose.model("Profile");
+          await Profile.findOneAndUpdate(
+            { user: user._id },
+            { $set: { "personal.avatar": picture } }
+          );
+        } catch (e) {
+          console.error("Failed to update profile avatar:", e);
         }
-      } catch (e) {
-  }
-}
+      }
+    }
     return sendTokenResponse(user, 200, res);
   } catch (error) {
     return res.status(500).json({

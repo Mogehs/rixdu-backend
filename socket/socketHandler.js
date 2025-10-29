@@ -50,7 +50,7 @@ export const socketHandler = (io) => {
             senderId: parsedMessage.sender._id,
           });
 
-          // Update chat list for receivers
+          // Update chat list for receivers and send notification
           receiverIds.forEach((receiverId) => {
             const receiverRoom = `user:${receiverId}`;
             io.to(receiverRoom).emit("chat-list-update", {
@@ -59,6 +59,14 @@ export const socketHandler = (io) => {
               lastMessageAt: parsedMessage.timestamp,
               senderId: parsedMessage.sender._id,
               unreadIncrement: true,
+            });
+
+            // Send new message notification with full details
+            io.to(receiverRoom).emit("new-message-notification", {
+              chatId,
+              message: parsedMessage.content,
+              sender: parsedMessage.sender,
+              timestamp: parsedMessage.timestamp,
             });
           });
 

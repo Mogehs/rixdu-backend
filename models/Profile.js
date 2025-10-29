@@ -213,8 +213,8 @@ ProfileSchema.statics.getPublicProfile = async function (userId) {
     .populate({
       path: "public.ratings",
       populate: [
-        { path: "reviewer", select: "name email" },
-        { path: "reviewee", select: "name email" },
+        { path: "reviewer", select: "name email avatar" },
+        { path: "reviewee", select: "name email avatar" },
       ],
     })
 
