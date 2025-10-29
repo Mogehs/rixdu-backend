@@ -8,8 +8,6 @@ import cluster from "cluster";
 import os from "os";
 import helmet from "helmet";
 import compression from "compression";
-import swaggerUi from "swagger-ui-express";
-import { readFileSync } from "fs";
 import connectDB from "./config/db.js";
 import { apiLimiter } from "./utils/redisRateLimit.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -43,16 +41,6 @@ import { socketHandler } from "./socket/socketHandler.js";
 import { setIO } from "./utils/socket.js";
 
 dotenv.config();
-
-// Load Swagger documentation
-let swaggerDocument;
-try {
-  swaggerDocument = JSON.parse(readFileSync("./swagger-output.json", "utf8"));
-} catch (error) {
-  logger.warn(
-    'Swagger documentation not found. Run "npm run swagger" to generate it.'
-  );
-}
 
 // =============================
 // Clustering + Memory Controls
@@ -188,20 +176,6 @@ if (
   // =============================
   const apiVersion = "/api/v1";
 
-  // Swagger API Documentation
-  if (swaggerDocument) {
-    app.use(
-      "/api-docs",
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerDocument, {
-        customSiteTitle: "Rixdu API Documentation",
-        customCss: ".swagger-ui .topbar { display: none }",
-        customfavIcon: "/favicon.ico",
-      })
-    );
-    logger.info("Swagger UI available at /api-docs");
-  }
-
   app.use(`${apiVersion}/auth`, authRoutes);
   app.use(`${apiVersion}/profiles`, profileRoutes);
   app.use(`${apiVersion}/users`, userRoutes);
@@ -229,9 +203,6 @@ if (
       message: "Rixdu API is running",
       version: "1.0",
       serverTime: new Date().toISOString(),
-      documentation: swaggerDocument
-        ? "/api-docs"
-        : "Run 'npm run swagger' to generate documentation",
     });
   });
 
