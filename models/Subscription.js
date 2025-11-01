@@ -108,7 +108,7 @@ const subscriptionSchema = new mongoose.Schema(
     maxListings: {
       type: Number,
       default: function () {
-        return this.planType === "trial" ? 1 : -1; // -1 means unlimited for premium
+        return this.planType === "trial" ? 10 : -1; // 10 listings for trial, -1 means unlimited for premium
       },
     },
   },
@@ -275,7 +275,7 @@ subscriptionSchema.statics.createTrialSubscription = async function (userId) {
     price: 0,
     paymentStatus: "free",
     hasUsedTrial: true,
-    maxListings: 1,
+    maxListings: 10,
   });
 };
 

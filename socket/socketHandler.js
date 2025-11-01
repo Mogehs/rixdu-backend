@@ -160,8 +160,17 @@ export const socketHandler = (io) => {
         const Chat = (await import("../models/Chat.js")).default;
         const chat = await Chat.findById(chatId).populate("sender receiver");
 
+        // Add participants to the message for socket handler
+        const messageWithParticipants = {
+          ...newMessage.toObject(),
+          participants: [
+            chat.sender._id.toString(),
+            chat.receiver._id.toString(),
+          ],
+        };
+
         // Emit to chat room for real-time message display
-        await pub.publish(`Messages`, JSON.stringify(newMessage));
+        await pub.publish(`Messages`, JSON.stringify(messageWithParticipants));
 
         // Send clean chat list updates to both users
         const senderUpdate = {

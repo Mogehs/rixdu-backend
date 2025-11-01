@@ -42,6 +42,7 @@
     "nodemailer": "^7.0.3",
     "socket.io": "^4.8.1",
     "stripe": "^18.5.0",
+    "swagger-autogen": "^2.23.7",
     "twilio": "^5.7.1"
   },
   "devDependencies": {

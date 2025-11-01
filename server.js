@@ -30,6 +30,7 @@ import verificationRoutes from "./routes/verification.routes.js";
 import stripeRoutes from "./routes/stripe.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import reportRoutes from "./routes/report.routes.js";
+import contactRoutes from "./routes/contact.routes.js";
 import { handleUploadError } from "./middleware/verification-upload.middleware.js";
 import errorHandler, { notFound } from "./middleware/error.middleware.js";
 import logger, { httpLogger } from "./utils/logger.js";
@@ -196,6 +197,7 @@ if (
   app.use(`${apiVersion}/stripe`, stripeRoutes);
   app.use(`${apiVersion}/admin`, adminRoutes);
   app.use(`${apiVersion}/reports`, reportRoutes);
+  app.use(`${apiVersion}/contact`, contactRoutes);
 
   app.get("/api/", (_req, res) => {
     res.json({
